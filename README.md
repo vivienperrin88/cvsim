@@ -20,10 +20,15 @@ import qttlind as ql
 system = ql.System()
 A = system.add_mode("memory", bits=5)
 B = system.add_mode("buffer", bits=3)
-H = A.dag()**2 * B + A**2 * B.dag() - 4.0 * (B + B.dag()) + 0.04 * (A + A.dag())
+H = A.dag() ** 2 * B + A**2 * B.dag() - 4.0 * (B + B.dag()) + 0.04 * (A + A.dag())
 solver = ql.LindbladSolver(system, H, [np.sqrt(10.0) * B], dt=2e-3, tol=1e-8)
-res = solver.run(system.product_state(memory=ql.states.cat(2.0), buffer=ql.states.fock(0)),
-                 t_final=1.0, e_ops={"parity": A.parity()}, every=50, track=["chi_e", "chi_q", "chi_mu"])
+res = solver.run(
+    system.product_state(memory=ql.states.cat(2.0), buffer=ql.states.fock(0)),
+    t_final=1.0,
+    e_ops={"parity": A.parity()},
+    every=50,
+    track=["chi_e", "chi_q", "chi_mu"],
+)
 res.to_pandas()
 ```
 
