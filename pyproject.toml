@@ -1,0 +1,49 @@
+# Monorepo root: a *virtual* uv workspace (no package of its own).
+#
+#   packages/qttlind  -- QTT Lindblad solver + CV extension (imported with its history, v2.0.0)
+#   packages/cvsim    -- hardware-aware continuous-variable simulator (this project)
+#
+# One lockfile (uv.lock) for both. `uv sync` installs both packages (editable) with the dev and
+# notebook tools; each package keeps its own pytest / ruff / mypy configuration in its own
+# pyproject.toml, so commands are run from the package directory (see CONTRIBUTING.md).
+
+[tool.uv.workspace]
+members = ["packages/qttlind"]
+
+[tool.uv.sources]
+qttlind = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "qttlind",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "ruff>=0.16",
+    "mypy>=1.11",
+    "pre-commit>=3.7",
+    "pandas>=2.1",
+]
+notebooks = [
+    "jupyterlab>=4.2",
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+    "nbclient>=0.10",
+    "nbformat>=5.10",
+    "pandas>=2.1",
+]
+docs = [
+    "sphinx>=8.0",
+    "furo>=2024.8",
+    "myst-nb>=1.1",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.6",
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+]
+bench = [
+    "threadpoolctl>=3.5",
+]
+
+[tool.uv]
+default-groups = ["dev", "notebooks"]

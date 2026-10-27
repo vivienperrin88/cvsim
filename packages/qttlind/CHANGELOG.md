@@ -5,6 +5,12 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ## [Unreleased]
 
+### Changed
+
+- Repository: qttlind now lives in `packages/qttlind` of the cvsim monorepo (uv workspace, one
+  root `uv.lock`); CI, pre-commit and `.python-version` moved to the repository root. The
+  package itself is unchanged.
+
 ## [2.0.0] — 2026-10-26
 
 First production release: the complete solver of Moulinas & Waintal (arXiv:2605.27515) and the

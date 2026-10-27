@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+# Environments (uv)
+.venv/
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+# Notebooks
+.ipynb_checkpoints/
+# Large simulation outputs (keep results out of git)
+*.npz
+runs/
+# Windows/WSL: "Zone.Identifier" streams copied from Windows downloads
+*:Zone.Identifier
+*Zone.Identifier
+
+# documentation build products
+docs/_build/
+docs/api/generated/
+docs/tutorials/notebooks/
+jupyter_execute/
