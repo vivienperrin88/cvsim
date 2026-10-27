@@ -23,7 +23,7 @@ runs/
 *Zone.Identifier
 
 # documentation build products
-docs/_build/
-docs/api/generated/
-docs/tutorials/notebooks/
+**/docs/_build/
+**/docs/api/generated/
+**/docs/tutorials/notebooks/
 jupyter_execute/

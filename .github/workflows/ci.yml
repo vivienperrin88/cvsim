@@ -1,7 +1,8 @@
 name: CI
 
 # Monorepo: one lockfile, one lint job, then every check once per package.
-# Each package is checked from its own directory, with its own pytest / mypy configuration.
+# Environments are synced from the root (the dependency groups live there); each package is then
+# checked from its own directory, with its own pytest / mypy / Sphinx configuration.
 
 on:
   push:
@@ -18,7 +19,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: uv sync --locked --no-group notebooks
-      - name: ruff (hierarchical config: each package's own rules)
+      - name: "ruff (hierarchical config: each package's own rules)"
         run: |
           uv run ruff check
           uv run ruff format --check
@@ -41,7 +42,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install (exactly the locked versions)
+      - name: Install (exactly the locked versions; groups live in the root pyproject)
+        working-directory: .
         run: uv sync --locked --no-group notebooks
       - name: Type-check
         run: uv run mypy
@@ -63,7 +65,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --locked --group docs
+      - working-directory: .
+        run: uv sync --locked --group docs
       - run: uv run sphinx-build -W --keep-going -b html docs docs/_build/html
       - run: uv run python tools/check_doc_examples.py
       - uses: actions/upload-artifact@v4
@@ -108,5 +111,6 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --locked
+      - working-directory: .
+        run: uv sync --locked
       - run: uv run python tools/run_notebooks.py

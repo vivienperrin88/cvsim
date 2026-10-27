@@ -18,12 +18,14 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "cvsim",
     "qttlind",
 ]
 
 [manifest.dependency-groups]
 bench = [{ name = "threadpoolctl", specifier = ">=3.5" }]
 dev = [
+    { name = "cvsim", extras = ["qttlind"], editable = "packages/cvsim" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pandas", specifier = ">=2.1" },
@@ -743,6 +745,36 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f6/82/c0d8bb0a67df838fc7bc6f4060ffc404fd1154fd18e624d83e6abc41aeef/coverage-7.17.0-cp315-cp315t-win_arm64.whl", hash = "sha256:d472ee1c64868a917a47f02ffb4ac8c22b477f7589d57a3eb0c58b1ad4f0137c", size = 228716, upload-time = "2026-10-22T16:06:47.097Z" },
     { url = "https://files.pythonhosted.org/packages/c9/17/48032919343afa2906112d458aceda2043afdb24a2ee8eb4c60904d8ddf1/coverage-7.17.0-py3-none-any.whl", hash = "sha256:bac487dce0d2aff28ddf1a533a916f771416eee0e493960f611e49037b878e9d", size = 217383, upload-time = "2026-10-22T16:06:48.471Z" },
 ]
+
+[[package]]
+name = "cvsim"
+version = "0.1.0.dev0"
+source = { editable = "packages/cvsim" }
+dependencies = [
+    { name = "numpy" },
+    { name = "scipy" },
+]
+
+[package.optional-dependencies]
+pandas = [
+    { name = "pandas" },
+]
+plot = [
+    { name = "matplotlib" },
+]
+qttlind = [
+    { name = "qttlind" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.8" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.1" },
+    { name = "qttlind", marker = "extra == 'qttlind'", editable = "packages/qttlind" },
+    { name = "scipy", specifier = ">=1.11" },
+]
+provides-extras = ["qttlind", "plot", "pandas"]
 
 [[package]]
 name = "cycler"
