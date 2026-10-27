@@ -1,8 +1,8 @@
 # Development plan and status
 
 Each session is one branch, merged when every gate is green and reviewed by the owner before the
-next one starts. Acceptance criteria are the milestone's; reproduction targets R1–R12 are listed in
-`packages/cvsim/docs/design/architecture.md` once the hardware layer exists.
+next one starts. The detailed content of every session (deliverables, verification, planned
+check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/design/roadmap.md).
 
 | M | session | content | status |
 | --- | --- | --- | --- |

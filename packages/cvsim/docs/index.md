@@ -24,6 +24,7 @@ quickstart
 installation
 tutorials/index
 design/architecture
+design/roadmap
 conventions
 api/index
 changelog
