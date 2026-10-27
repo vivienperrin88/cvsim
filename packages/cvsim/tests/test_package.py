@@ -1,5 +1,7 @@
-"""Package surface: metadata, feature flags, errors and warnings."""
+"""Package surface: metadata, feature flags, errors and warnings, doctests."""
 
+import doctest
+import importlib
 import warnings
 
 import pytest
@@ -92,3 +94,19 @@ class TestErrors:
     def test_every_class_is_exported(self):
         public = {n for n, v in vars(errors).items() if isinstance(v, type) and issubclass(v, Exception)}
         assert public == set(errors.__all__)
+
+
+# ------------------------------------------------------------------------------- doctests
+DOCTEST_MODULES = ["cvsim.core.conventions"]
+
+
+@pytest.mark.parametrize("module", DOCTEST_MODULES)
+def test_doctests(module):
+    """Run a module's docstring examples (each module listed here must have some)."""
+    mod = importlib.import_module(module)
+    runner = doctest.DebugRunner(verbose=False)  # raises on the first failure
+    n = 0
+    for test in doctest.DocTestFinder().find(mod):
+        runner.run(test)
+        n += len(test.examples)
+    assert n > 0

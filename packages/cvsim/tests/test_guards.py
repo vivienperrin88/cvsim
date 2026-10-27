@@ -83,6 +83,7 @@ class TestLayerRule:
             ("cvsim.protocols.gbs", "from ..backends import base\nfrom ..hardware import sources\n"),
             ("cvsim", "from . import errors\nfrom .gaussian import ops\n"),  # the root sees everything
             ("cvsim.reference.fock_dense", "import numpy as np\nimport scipy.linalg\n"),
+            ("cvsim.reference.extra", "from .fock_dense import destroy\n"),  # an aside package's own modules
         ],
     )
     def test_accepts(self, importer, source):
