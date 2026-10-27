@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+message: "If you use qttlind, please cite the method paper and this software."
+title: "qttlind: multilevel tensor-network simulation of open bosonic and continuous-variable quantum systems"
+type: software
+version: 2.0.0
+date-released: 2026-10-26
+license: MIT
+authors:
+  - family-names: Perrin
+    given-names: Vivien
+keywords: [tensor networks, quantics, Lindblad equation, bosonic codes, continuous-variable optics]
+preferred-citation:
+  type: article
+  title: "Multilevel tensor-network compression for the Lindblad dynamics of bosonic circuits"
+  authors:
+    - family-names: Moulinas
+      given-names: J.
+    - family-names: Waintal
+      given-names: X.
+  journal: arXiv
+  identifiers:
+    - type: other
+      value: "arXiv:2605.27515"
+references:
+  - type: article
+    title: "Generating Schrödinger-cat-like states by means of conditional measurements on a beam splitter"
+    authors: [{family-names: Dakna}, {family-names: Anhut}, {family-names: Opatrný}, {family-names: Knöll}, {family-names: Welsch}]
+    journal: Physical Review A
+    volume: 55
+    start: 3184
+    year: 1997
+  - type: article
+    title: "Generating optical Schrödinger kittens for quantum information processing"
+    authors: [{family-names: Ourjoumtsev}, {family-names: Tualle-Brouri}, {family-names: Laurat}, {family-names: Grangier}]
+    journal: Science
+    volume: 312
+    start: 83
+    year: 2006
+  - type: article
+    title: "Encoding a qubit in an oscillator"
+    authors: [{family-names: Gottesman}, {family-names: Kitaev}, {family-names: Preskill}]
+    journal: Physical Review A
+    volume: 64
+    start: "012310"
+    year: 2001
