@@ -156,3 +156,20 @@ def test_db_per_neper():
 def test_vacuum_variance():
     states = qttlind_module("gaussian.states")
     assert_same(cv.VACUUM_VARIANCE * np.eye(4), states.GaussianState.vacuum(2).cov, 0.0, "vacuum")
+
+
+@FAST
+@given(seed=st.integers(0, 2**32 - 1), M=st.integers(1, 5))
+def test_symplectic_eigenvalues(seed, M):
+    """core.linalg against qttlind.gaussian.phase_space (both via i V^{1/2} Ω V^{1/2}, written independently)."""
+    ps = qttlind_module("gaussian.phase_space")
+    from cvsim.core import linalg
+
+    rng = np.random.default_rng(seed)
+    H = rng.normal(size=(2 * M, 2 * M))
+    S = linalg.expm(cv.omega(M) @ (H + H.T) / 4).real
+    nu = rng.uniform(0.5, 3.0, M)
+    V = S @ np.diag(np.concatenate([nu, nu])) @ S.T
+    c = np.abs(S).max() ** 2
+    assert_same(linalg.symplectic_eigenvalues(V), ps.symplectic_eigenvalues(V), 1e-10 * c, "ν")
+    assert_same(np.sort(nu), linalg.symplectic_eigenvalues(V), 1e-10 * c, "ν vs construction")
