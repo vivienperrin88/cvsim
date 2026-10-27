@@ -1,0 +1,110 @@
+[project]
+name = "cvsim"
+version = "0.1.0.dev0"
+description = "Hardware-aware simulation of multimode continuous-variable quantum optics, with noise accounting"
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+authors = [{ name = "Vivien Perrin" }]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+keywords = ["continuous variables", "Gaussian states", "quantum optics", "frequency combs", "cluster states", "noise budget"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# Optional tensor-network backend (quantics comb, Kraus-map Lindblad integration). Resolved from
+# the workspace member packages/qttlind (see the root pyproject.toml).
+qttlind = ["qttlind>=2.0,<3"]
+plot = ["matplotlib>=3.8"]
+pandas = ["pandas>=2.1"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cvsim = ["py.typed"]
+
+# ----------------------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-rfEs", "--strict-markers", "--strict-config"]
+xfail_strict = true
+markers = [
+    "slow: long-running tests (run with --runslow)",
+    "qttlind: needs the optional qttlind package (skipped when it is not installed)",
+    "repro: reproduction of a published experiment (acceptance table in the matching notebook)",
+]
+filterwarnings = [
+    "error::DeprecationWarning:cvsim.*",
+    "error::RuntimeWarning:cvsim.*",
+]
+
+[tool.coverage.run]
+source = ["cvsim"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@overload"]
+
+# ----------------------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["notebooks", "docs/_build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "SIM", "RUF", "N"]
+ignore = [
+    "N802", "N803", "N806",   # physics names: V, S, Omega, X, Y ...
+    "B905",                   # zip(strict=...): lengths are validated at the public boundary
+    "RUF005",                 # `left + (k,)` reads better than `(*left, k)` for shapes
+    "RUF001", "RUF002", "RUF003",  # Greek letters and math symbols in strings/comments
+    "E741",                   # 'l' is a mode index
+    "RUF007",                 # zip(x[:-1], x[1:]) is explicit about the pairs
+    "SIM108",                 # if/else blocks read better than long ternaries in numerical code
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cvsim"]
+known-third-party = ["qttlind"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N", "B018"]
+"docs/conf.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# ----------------------------------------------------------------------------- mypy
+# Stricter than qttlind: every function of a new code base is annotated from the start.
+[tool.mypy]
+python_version = "3.12"
+files = ["src/cvsim"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_reexport = true
+strict_equality = true
+ignore_missing_imports = true

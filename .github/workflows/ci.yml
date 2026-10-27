@@ -1,0 +1,116 @@
+name: CI
+
+# Monorepo: one lockfile, one lint job, then every check once per package.
+# Environments are synced from the root (the dependency groups live there); each package is then
+# checked from its own directory, with its own pytest / mypy / Sphinx configuration.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"      # weekly: slow tests and notebooks
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --no-group notebooks
+      - name: "ruff (hierarchical config: each package's own rules)"
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["qttlind", "cvsim"]
+        python-version: ["3.12", "3.13"]
+    env:
+      OMP_NUM_THREADS: "1"
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (exactly the locked versions; groups live in the root pyproject)
+        working-directory: .
+        run: uv sync --locked --no-group notebooks
+      - name: Type-check
+        run: uv run mypy
+      - name: Test
+        run: uv run pytest --cov ${{ github.event_name == 'schedule' && '--runslow' || '' }}
+
+  docs:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["qttlind", "cvsim"]
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - working-directory: .
+        run: uv sync --locked --group docs
+      - run: uv run sphinx-build -W --keep-going -b html docs docs/_build/html
+      - run: uv run python tools/check_doc_examples.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: html-docs-${{ matrix.package }}
+          path: packages/${{ matrix.package }}/docs/_build/html
+
+  wheel:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["qttlind", "cvsim"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv build --package ${{ matrix.package }} --out-dir dist
+      - name: Test the wheel in a clean environment (no other workspace package installed)
+        run: |
+          uv venv /tmp/wheel-env
+          uv pip install --python /tmp/wheel-env dist/*.whl pytest hypothesis pandas
+          cd /tmp && /tmp/wheel-env/bin/python -m pytest "$GITHUB_WORKSPACE/packages/${{ matrix.package }}/tests" -q -p no:cacheprovider
+
+  notebooks:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["qttlind", "cvsim"]
+    env:
+      OMP_NUM_THREADS: "1"
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - working-directory: .
+        run: uv sync --locked
+      - run: uv run python tools/run_notebooks.py
