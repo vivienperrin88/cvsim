@@ -7,8 +7,8 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M | session | content | status |
 | --- | --- | --- | --- |
 | M0 | S00 | monorepo (qttlind with history), cvsim scaffold, CI, docs, decision records | **done** |
-| M0 | S01 | errors, feature flags, layer-rule and LAPACK-seam guard tests | next |
-| M0 | S02 | conventions + independent oracle, [tested] rules, contract-test harness vs qttlind | |
+| M0 | S01 | errors, feature flags, layer-rule and LAPACK-seam guard tests | **done** |
+| M0 | S02 | conventions + independent oracle, [tested] rules, contract-test harness vs qttlind | next |
 | M1 | S03 | `core.linalg`: Williamson, Takagi, Bloch–Messiah, stable logdet, physical projection | |
 | M1 | S04 | `GaussianState` | |
 | M1 | S05 | symplectic library (incl. Clements) | |

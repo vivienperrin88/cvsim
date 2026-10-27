@@ -39,7 +39,8 @@ them once with `uv run pre-commit install`. Notebooks are committed **with** the
 - [ ] New numerics are checked against an independent reference (dense oracle, closed form, the
       other Gaussian engine, a measured convergence order) — values, not just "it runs".
 - [ ] No `numpy.linalg` / `scipy.linalg` call outside the package's `core/linalg.py` on a hot path.
-- [ ] A module imports only from its own layer or lower ones (`docs/design/architecture.md`).
+- [ ] A module imports only from its own layer or lower ones (`cvsim._layers`; enforced by
+      `tests/test_guards.py` in cvsim, by review in qttlind).
 - [ ] `ruff`, `ruff format --check` and `mypy` are clean; the docs build with `-W`.
 - [ ] The package's `CHANGELOG.md` has an entry under "Unreleased"; `PROGRESS.md` is updated.
 
