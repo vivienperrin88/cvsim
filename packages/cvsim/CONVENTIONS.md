@@ -51,6 +51,33 @@ compare them with qttlind.
 * **Contract** (`tests/contract`, marker `qttlind`): every rule above agrees with
   `qttlind.gaussian` to a few ulps (closed forms) or 1e-12 (short computations).
 
+## Decompositions **[tested]**
+
+`cvsim.core.linalg` is the only module that calls LAPACK (**[guarded]**). Its symplectic
+decompositions follow these rules:
+
+* **Ordering.** Williamson `ν` ascending; Bloch–Messiah `r >= 0` descending (most squeezed
+  supermode first); Takagi `s` descending.
+* **Factors.** `williamson`: `V = S diag(ν, ν) Sᵀ`, `S` symplectic. `bloch_messiah`:
+  `S = O1 diag(e^{−r}, e^{r}) O2`, `O1`, `O2` orthogonal symplectic to round-off; the supermodes are
+  `U[:, k]` with `O1 = [[Re U, −Im U], [Im U, Re U]]`. `takagi`: `A = U diag(s) Uᵀ`, `U` unitary.
+* **Degeneracy.** Values within a relative `rtol` (default `1e-8`, `DEGENERACY_RTOL`) form a group;
+  every decomposition returns its `groups`. Squeezing below `rtol` is reported as `r = 0`
+  (reconstruction error at most about `rtol · ‖S‖`). Grouping values that differ by `ε` (a larger
+  `rtol`) costs a reconstruction error of order `ε`.
+* **Gauge.** Inside a group the factors are defined only up to a rotation: `O(k)` for equal
+  `r > 0` and equal `s > 0`, the passive `U(k)` for `r = 0`, `s = 0` and every Williamson group. It
+  is fixed by **orthogonal Procrustes against a reference basis**: the `k` reference columns with
+  the largest weight in the group's subspace are selected (in reference order) and the group is
+  rotated to be closest to them. The default reference is the input modes; `reference=` accepts a
+  previous result (to keep a parameter sweep continuous) or a user basis (e.g. Hermite–Gauss mode
+  functions). For a one-dimensional group this fixes the sign (largest component of positive real
+  part) or the phase (largest component real positive). Results therefore do not depend on the
+  basis LAPACK happens to return.
+* **Physical projection.** `nearest_physical_covariance` raises every symplectic eigenvalue below
+  `1/2` to `1/2` in the Williamson basis: the correction is pure added noise and vanishes for a
+  physical input. It is not the Frobenius-nearest physical matrix (a semidefinite program).
+
 ## Errors and warnings
 
 * Every deliberate error derives from `cvsim.errors.CvsimError`: `InputError` (also a

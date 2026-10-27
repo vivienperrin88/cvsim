@@ -7,6 +7,14 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S03** — `cvsim.core.linalg` (feature `linalg`), the only module calling LAPACK: `eigh`,
+  `eigvalsh`, `svd` (gesdd → gesvd fallback), `solve`, `inv`, `cholesky`, `logdet_pd`, `sqrtm_psd`,
+  `expm`, `qr`, `polar`, `timed()` statistics per kernel; `symplectic_eigenvalues`, `williamson`,
+  `bloch_messiah` (supermodes; orthogonal symplectic factors to round-off), `takagi`,
+  `degenerate_groups`, `nearest_physical_covariance`. Degenerate groups are reported and their gauge
+  is fixed by orthogonal Procrustes against a reference basis (`reference=`), so results are
+  reproducible and sweeps continuous. Tested on Hypothesis inputs incl. degenerate, rank-deficient
+  and ill-conditioned spectra; contract test of ν against qttlind.
 - **S02** — `cvsim.core.conventions` (feature `conventions`): Ω, mode indices, xxpp↔xpxp,
   complex basis, ħ / shot-noise / dB conversions, `symplectic_from_bogoliubov`, `is_symplectic`,
   `embed`, the gates D, R, S, BS, S2, interferometer, CZ(A), CX, P, F (= R(π/2)), the homodyne
