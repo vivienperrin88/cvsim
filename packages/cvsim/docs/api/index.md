@@ -8,6 +8,8 @@ The subpackages are listed in dependency order as they are implemented.
    :recursive:
 
    cvsim.errors
+   cvsim.core
+   cvsim.reference
 ```
 
 ## Top-level namespace

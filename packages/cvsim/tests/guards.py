@@ -95,7 +95,8 @@ def layer_violations(module: Module) -> list[str]:
         if own is None or own.startswith("_"):  # top-level package and private top-level modules
             continue
         if own in ASIDE:
-            out.append(f"{where}: {own!r} must not import anything from cvsim")
+            if dep != own:  # its own modules are fine
+                out.append(f"{where}: {own!r} must not import anything from cvsim")
         elif dep is None or dep.startswith("_"):
             out.append(f"{where}: subpackages import siblings or errors, never the package root or its private modules")
         elif dep == "errors":
