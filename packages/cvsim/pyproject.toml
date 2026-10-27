@@ -54,6 +54,8 @@ filterwarnings = [
     "error::DeprecationWarning:cvsim.*",
     "error::RuntimeWarning:cvsim.*",
 ]
+# cvsim's own warnings (CvsimWarning) are turned into errors by an autouse fixture in
+# tests/conftest.py, not here: naming the class here would import cvsim before coverage starts.
 
 [tool.coverage.run]
 source = ["cvsim"]
