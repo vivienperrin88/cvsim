@@ -29,6 +29,9 @@ classifiers = [
 qttlind = ["qttlind>=2.0,<3"]
 plot = ["matplotlib>=3.8"]
 pandas = ["pandas>=2.1"]
+# Reference library for the comparison tests of tests/contract (marker `thewalrus`); not needed at
+# run time. The Walrus is also what Strawberry Fields and MrMustard build on.
+compare = ["thewalrus>=0.22,<0.23"]
 
 [build-system]
 requires = ["setuptools>=77"]
@@ -48,6 +51,7 @@ xfail_strict = true
 markers = [
     "slow: long-running tests (run with --runslow)",
     "qttlind: needs the optional qttlind package (skipped when it is not installed)",
+    "thewalrus: compares with The Walrus (optional extra `compare`; skipped when it is not installed)",
     "repro: reproduction of a published experiment (acceptance table in the matching notebook)",
 ]
 filterwarnings = [

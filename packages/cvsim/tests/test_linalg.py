@@ -234,6 +234,21 @@ class TestWilliamson:
         a, b = la.williamson(V), la.williamson(V + tiny)
         assert np.allclose(a.S, b.S, atol=1e-9)
 
+    @pytest.mark.parametrize("nu", [[0.6, 1.1, 1.7], [0.5, 0.5, 1.3]], ids=["generic", "degenerate"])
+    def test_factor_is_invariant_under_hbar_rescaling(self, rng, nu):
+        """V → 2V (ħ = 1 → 2) doubles ν and leaves S unchanged (CONVENTIONS.md, comparison)."""
+        V, _ = _random_covariance(rng, 3, np.array(nu))
+        a, b = la.williamson(V), la.williamson(2 * V)
+        assert np.allclose(b.nu, 2 * a.nu) and np.allclose(b.S, a.S, atol=1e-9)
+
+    def test_factor_is_covariant_under_mode_relabelling(self, rng):
+        """Non-degenerate ν: relabelling the modes permutes the rows of S, nothing else."""
+        V, _ = _random_covariance(rng, 3, np.array([0.6, 1.1, 1.7]))
+        p = np.array([2, 0, 1])
+        P = np.eye(6)[np.concatenate([p, p + 3])]
+        a, b = la.williamson(V), la.williamson(P @ V @ P.T)
+        assert np.allclose(b.S, P @ a.S, atol=1e-9)
+
     def test_reference_tracks_a_previous_result(self, rng):
         V, _ = _random_covariance(rng, 3, np.array([0.8, 0.8, 0.8]))
         first = la.williamson(V)

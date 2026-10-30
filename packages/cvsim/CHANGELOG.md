@@ -7,6 +7,13 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S03b** — comparison with The Walrus, Strawberry Fields and MrMustard (CONVENTIONS.md,
+  "Comparison with other libraries"): result layout, ordering, block order and gauge of Williamson,
+  Bloch–Messiah, Takagi and the symplectic eigenvalues, side by side. Optional extra `compare`
+  (The Walrus 0.22) and marker `thewalrus`: 10 contract tests compute the matrix relating each
+  cvsim factor to The Walrus's and require exactly the expected form (ordering, the π/2 block swap
+  of Bloch–Messiah, a gauge rotation inside degenerate groups). Two new tests of cvsim's gauge:
+  invariance under ħ rescaling and covariance under mode relabelling.
 - **S03** — `cvsim.core.linalg` (feature `linalg`), the only module calling LAPACK: `eigh`,
   `eigvalsh`, `svd` (gesdd → gesvd fallback), `solve`, `inv`, `cholesky`, `logdet_pd`, `sqrtm_psd`,
   `expm`, `qr`, `polar`, `timed()` statistics per kernel; `symplectic_eigenvalues`, `williamson`,
