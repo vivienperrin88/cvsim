@@ -10,6 +10,7 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M0 | S01 | errors, feature flags, layer-rule and LAPACK-seam guard tests | **done** |
 | M0 | S02 | conventions + independent oracle, [tested] rules, contract-test harness vs qttlind | **done** |
 | M1 | S03 | `core.linalg`: Williamson, Takagi, Bloch–Messiah, stable logdet, physical projection | **done** |
+| M1 | S03b | decompositions compared with The Walrus / Strawberry Fields / MrMustard; contract tests vs The Walrus | **done** |
 | M1 | S04 | `GaussianState` | next |
 | M1 | S05 | symplectic library (incl. Clements) | |
 | M1 | S06 | channels `(X, Y)` + `NoiseLedger` | |

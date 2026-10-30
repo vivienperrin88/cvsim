@@ -5,7 +5,7 @@
 * Tests marked ``slow`` are skipped unless ``--runslow`` is given (CI runs them weekly).
 * cvsim's own warnings (``CvsimWarning``) fail a test unless it expects them (``pytest.warns``).
 * Tests marked ``qttlind`` are skipped when the optional qttlind package is not importable, so the
-  suite also passes for a bare ``pip install cvsim``.
+  suite also passes for a bare ``pip install cvsim``; likewise ``thewalrus`` (extra ``compare``).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ if importlib.util.find_spec("cvsim") is None:  # not installed: use the source t
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 HAVE_QTTLIND = importlib.util.find_spec("qttlind") is not None
+HAVE_THEWALRUS = importlib.util.find_spec("thewalrus") is not None
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -33,11 +34,14 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     skip_slow = pytest.mark.skip(reason="slow test: use --runslow")
     skip_qttlind = pytest.mark.skip(reason="qttlind is not installed")
+    skip_thewalrus = pytest.mark.skip(reason="thewalrus is not installed (extra `compare`)")
     for item in items:
         if "slow" in item.keywords and not config.getoption("--runslow"):
             item.add_marker(skip_slow)
         if "qttlind" in item.keywords and not HAVE_QTTLIND:
             item.add_marker(skip_qttlind)
+        if "thewalrus" in item.keywords and not HAVE_THEWALRUS:
+            item.add_marker(skip_thewalrus)
 
 
 @pytest.fixture

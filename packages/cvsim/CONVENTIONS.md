@@ -78,6 +78,48 @@ decompositions follow these rules:
   `1/2` to `1/2` in the Williamson basis: the correction is pure added noise and vanishes for a
   physical input. It is not the Frobenius-nearest physical matrix (a semidefinite program).
 
+## Comparison with other libraries
+
+How the same decompositions come out of The Walrus 0.22, Strawberry Fields 0.23 and MrMustard
+0.7.3 (read from their sources and checked numerically, October 2026). All three use ħ = 2
+(vacuum `V = I`) and the xxpp ordering with `Ω = [[0, I], [−I, 0]]`; apart from ħ this is cvsim's
+convention. Decomposition *factors* do not depend on ħ; symplectic eigenvalues scale with it
+(vacuum `ν = 1` there, `1/2` here). Entries marked **[contract]** are asserted by
+`tests/contract/test_contract_thewalrus.py` (marker `thewalrus`, extra `compare`): the matrix
+relating the two results is computed and must have exactly the stated form, acting inside the
+degeneracy groups only. Strawberry Fields and MrMustard are not installed for the tests (heavy
+dependencies); their entries were checked by running their decomposition code by hand.
+
+| | cvsim | The Walrus (`thewalrus.decompositions`) | Strawberry Fields (`sf.decompositions`) |
+| --- | --- | --- | --- |
+| Williamson: result | `(nu, S, groups)`, `V = S diag(ν, ν) Sᵀ` | `(Db, S)`, `V = S Db Sᵀ` | `(Db, S)`, `V = S Db Sᵀ` (the docstring says `Sᵀ Db S`; the code returns the former) |
+| Williamson: order of ν | ascending | LAPACK's Schur order, unsorted **[contract]** | Schur order, unsorted |
+| Williamson: gauge | Procrustes (sign/phase per mode, `U(k)` per group) | LAPACK's per-mode rotation **[contract]** | LAPACK's; can differ from The Walrus's |
+| Bloch–Messiah: result | `S = O1 diag(e^{−r}, e^{r}) O2` | `S = O D Q`, `D = diag(e^{r}, e^{−r})` | `S = O1 D O2`, `D = diag(e^{r}, e^{−r})` |
+| Bloch–Messiah: blocks | squeezed quadrature first | anti-squeezed first: `O = O1 Ω K`, `K` a gauge rotation **[contract]** | anti-squeezed first; per-mode signs can differ from The Walrus |
+| Bloch–Messiah: order | `r` descending | `r` descending **[contract]** | `r` descending |
+| Bloch–Messiah: no squeezing | `O1 = I`, `O2 = S` | `O = I`, `Q = S` **[contract]** | `O1 = S`, `O2 = I` |
+| Bloch–Messiah: degeneracy | relative `rtol` (1e-8), reported in `groups` | not detected; LAPACK's basis **[contract]** | values rounded to 9 decimals, then an SVD per group |
+| Takagi: result | `(s, U, groups)`, `s` descending | `(s, U)`, `s` descending | `(s, U)`, `s` descending and rounded to 13 decimals |
+| Takagi: gauge | sign / `O(k)` fixed by Procrustes | LAPACK's signs **[contract]** | LAPACK's signs; groups found by rounding |
+| Symplectic eigenvalues | ascending, vacuum 1/2 | unsorted, in the input's scale (vacuum 1 for ħ = 2) **[contract]** | — |
+
+**MrMustard 0.7.3** has no Williamson, Bloch–Messiah or Takagi of its own and does not call The
+Walrus's (it imports The Walrus only to report its version). Its
+`physics.gaussian.symplectic_eigenvals` returns `|eig(iΩ V · 2/ħ)|[::2]`: unsorted, in shot-noise
+units (vacuum 1).
+
+**What the gauge buys.** In these libraries the gauge is whatever LAPACK returns: repeatable on one
+machine, but with nothing else guaranteed. For example, The Walrus's Williamson factor changes when
+the same covariance is rescaled from ħ = 1 to ħ = 2, or when the modes are relabelled and then
+relabelled back. The Walrus and Strawberry Fields can also return different supermode signs for the
+same matrix. cvsim's factors are invariant under the ħ rescaling and follow a relabelling of the
+modes (`S(PVPᵀ) = P S(V)` for non-degenerate ν; inside a degenerate group the columns may be
+reordered) **[tested]**. With `reference=` they also stay continuous along a parameter sweep. To
+compare a cvsim result with one of these libraries, compare gauge-invariant quantities (ν, r, s,
+`O1 D O2`, projectors on degenerate groups) or compute the relating rotation as the contract tests
+do.
+
 ## Errors and warnings
 
 * Every deliberate error derives from `cvsim.errors.CvsimError`: `InputError` (also a
