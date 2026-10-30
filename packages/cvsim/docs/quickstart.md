@@ -11,7 +11,7 @@ import numpy as np
 from cvsim.gaussian import GaussianState, ops
 from cvsim.gaussian import symplectic as sy
 
-# a two-mode squeezed vacuum, r = 0.5 (loss channels arrive in S06)
+# a two-mode squeezed vacuum, r = 0.5
 tms = GaussianState.two_mode_squeezed(0.5)
 print(tms.mean_photons())  # sinh² r per mode
 print(tms.log_negativity([0]))  # 2r / ln 2 ebits
@@ -36,4 +36,18 @@ print(len(mesh.cells), mesh.depth())
 # and any state as squeezers followed by an interferometer
 recipe = sy.preparation(s)
 print(recipe.r)  # [0.6, 0.6]
+
+# a squeezing budget: 10 dB at the source, three losses and electronic noise
+from cvsim.gaussian import GaussianChannel, NoiseLedger
+
+budget = (
+    NoiseLedger.start(GaussianState.squeezed(10 / 8.686))
+    .channel(GaussianChannel.loss(0.90), 0, "OPO escape", "loss")
+    .channel(GaussianChannel.loss(0.95), 0, "propagation", "loss")
+    .channel(GaussianChannel.loss(0.92), 0, "detector QE", "loss")
+    .channel(GaussianChannel.additive_noise(0.01), 0, "electronics", "electronic")
+)
+for row in budget.budget(mode=0, phi=0.0):  # shot-noise units; the fractions add up to 1
+    print(f"{row.label:12s} {row.variance:.4f}  {row.fraction:.0%}")
+print(budget.db_recovered("OPO escape"))  # what-if, not additive
 ```

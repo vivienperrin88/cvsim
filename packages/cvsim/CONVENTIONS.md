@@ -69,6 +69,26 @@ compare them with qttlind.
   of `U` is the mode function of `b_k` in the old basis; `d' = S(U)ᵀ d`, `V' = S(U)ᵀ V S(U)`. The
   supermodes of a state are the columns of the `U` of its Bloch–Messiah `O1`.
 
+## Channels and the noise ledger **[tested]**
+
+* **Channels** `GaussianChannel(X, Y, c)`: `d → X d + c`, `V → X V Xᵀ + Y`; completely positive
+  iff `Y + (i/2)(Ω − X Ω Xᵀ) >= 0` (checked at construction, `PhysicalityError` otherwise).
+  `a.then(b)` is `a` first: `X = X_b X_a`, `Y = X_b Y_a X_bᵀ + Y_b`. Loss `η` into `n̄`:
+  `X = √η I`, `Y = (1 − η)(n̄ + ½) I`; amplifier `G`: `X = √G I`, `Y = (G − 1)(n̄ + ½) I`; lossy
+  linear optics `T` (`‖T‖ <= 1`): `X = S(T)`, `Y = ½(I − XXᵀ)`.
+* **Phase diffusion** `φ ~ N(0, σ²)` is not Gaussian: cvsim returns the Gaussian state with the
+  exact first and second moments (mean × `e^{−σ²/2}`, anisotropic part of the mode's second moments
+  × `e^{−2σ²}`, its correlations × `e^{−σ²/2}`) and warns with `ApproximationWarning`.
+* **Noise ledger** (decision D7, approved convention): `V_out = signal + Σ_k C_k` with
+  `signal = 𝓛_n ⋯ 𝓛_1(V_in)` and `C_k = 𝓛_n ⋯ 𝓛_{k+1}(Y_k)` — each component's added noise
+  *carried forward to the output* through every later gate, channel and dephasing map. The
+  contributions add up to `V_out − signal` exactly and are tagged by component and kind; a
+  loss-like step (`X = √η I`, `η < 1`) also records its transmissivity. Quadrature budgets are
+  `uᵀ C_k u` for `x_φ` of a mode, in shot-noise units by default. **dB are not additive**:
+  `db_recovered(component)` replays the chain with that component ideal and is reported as a
+  separate what-if view; such numbers do not sum to the total loss of squeezing. Phase-diffusion
+  entries (the variance of the randomly rotated mean) are flagged `approximate`.
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

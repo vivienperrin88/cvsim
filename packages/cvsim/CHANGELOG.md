@@ -7,6 +7,16 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S06** — `cvsim.gaussian.GaussianChannel` `(X, Y, c)`: complete-positivity check, `then`,
+  `tensor`, `embed`, `apply`; `loss`, `amplifier`, `additive_noise`, `from_transfer` (lossy linear
+  optics), `from_ancilla` (gate with an ancilla, traced out), `from_symplectic`, `identity`.
+  `channels.phase_diffusion` (moment-matched, `ApproximationWarning`). **`NoiseLedger`**: exact
+  decomposition of the output covariance into the signal and each component's noise carried
+  forward to the output, by component or kind; transmissivities; quadrature budgets in shot-noise
+  units; `db_recovered` what-if view (non-additive, labelled). Tested against the Fock oracle (loss
+  Kraus map, amplifier as a traced two-mode squeezer, exact dephasing), closed forms, Hypothesis
+  chains (ledger sum and direct application agree to 1e-11), qttlind (`loss`, `amplifier`,
+  `thermal_noise`, `check_channel`) and The Walrus (`loss`, `passive_transformation`).
 - **S05** — `cvsim.gaussian.symplectic`: the gate matrices of the conventions (re-exported),
   `from_hamiltonian` (`exp(−itH)` → `expm(tΩH)`), `is_passive`, `unitary_from_passive`,
   `random_interferometer` (Haar), `random_symplectic`; **Clements mesh** `clements(U)` (rectangular,
