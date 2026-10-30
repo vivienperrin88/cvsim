@@ -12,8 +12,9 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
   `squeezed` (multimode), `two_mode_squeezed`, `from_symplectic(S, nu, mean)`, `product`,
   `from_hbar`, `from_xpxp`; `reduce`, `tensor`, `to_hbar`, `to_xpxp`, `isclose`; symplectic
   eigenvalues, purity, entropy, mean photons, photon covariance, complex moments; overlap and
-  general **mixed-state fidelity** (Banchi, Braunstein, Pirandola 2015, evaluated on
-  eigenvalues: no matrix square root); log-negativity; multimode Wigner function and single-mode
+  general **mixed-state fidelity** (pure Williamson modes projected out exactly, then Banchi,
+  Braunstein, Pirandola 2015 on eigenvalues, no matrix square root: 1e-13–1e-11 relative, also
+  with pure modes entangled with mixed ones); log-negativity; multimode Wigner function and single-mode
   grids; vacuum probability. `core.linalg.eigvals` (general eigenvalues). Tested against the
   Fock oracle (density matrices built from generators and Kraus maps), against closed forms
   (thermal and Scutaru fidelities, products) on Hypothesis states, and against

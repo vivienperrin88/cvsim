@@ -10,7 +10,8 @@ Tolerances. Truncation: one mode at N = 40, two modes at N = 22 with ``⟨n⟩ <
 neglected Fock tail is below 1e-12 (checked by the oracle's trace). Agreement is required to 1e-9
 (entropy: logarithms of tiny eigenvalues) or 1e-10 (everything else). The square-root oracle of the
 fidelity is only good to ~1e-8 (see ``TOL_FID_ORACLE``), so the fidelity is also checked against
-two closed forms (thermal states; Scutaru's single-mode formula, also on products) to 1e-11.
+exact values to 1e-11: thermal states, Scutaru's single-mode formula, the overlap for pure states,
+and products of these, including pure modes entangled with mixed ones by a common symplectic map.
 """
 
 from __future__ import annotations
@@ -266,14 +267,14 @@ class TestIdentities:
         t = data.draw(states(M=s.num_modes))
         f = s.fidelity(t)
         assert 0 <= f <= 1
-        assert math.isclose(f, t.fidelity(s), rel_tol=1e-7, abs_tol=1e-12)
+        assert math.isclose(f, t.fidelity(s), rel_tol=1e-10, abs_tol=1e-14)
         assert math.isclose(s.fidelity(s), 1.0, abs_tol=1e-8)
         # invariance under a common symplectic map and displacement
         S = cv.embed(cv.squeezing(0.3, 0.4), [0], s.num_modes)
         shift = np.arange(2 * s.num_modes) * 0.1
         u = GaussianState(S @ s.mean + shift, S @ s.cov @ S.T)
         v = GaussianState(S @ t.mean + shift, S @ t.cov @ S.T)
-        assert math.isclose(u.fidelity(v), f, rel_tol=1e-7, abs_tol=1e-12)
+        assert math.isclose(u.fidelity(v), f, rel_tol=1e-10, abs_tol=1e-14)
 
     @SETTINGS
     @given(s=states())
@@ -325,6 +326,14 @@ def scutaru(s: GaussianState, t: GaussianState) -> float:
     return float(np.exp(-0.5 * delta @ np.linalg.solve(Sig, delta)) / (np.sqrt(D + L) - np.sqrt(L)))
 
 
+def exact_single(s: GaussianState, t: GaussianState) -> float:
+    """Single-mode fidelity without round-off amplification: the overlap ⟨ψ|ρ|ψ⟩ when either state is
+    pure *by construction* (its covariance has ν = ½ + O(ε), where Scutaru's √Λ would give √ε)."""
+    if s.is_pure(1e-9) or t.is_pure(1e-9):
+        return s.overlap(t)
+    return scutaru(s, t)
+
+
 class TestFidelity:
     @pytest.mark.parametrize(("n1", "n2"), [(0.1, 0.1), (0.3, 1.7), (2.0, 0.05)])
     def test_thermal_closed_form(self, n1, n2):
@@ -337,13 +346,31 @@ class TestFidelity:
         assert math.isclose(s.fidelity(t), scutaru(s, t), rel_tol=1e-11, abs_tol=1e-14)
 
     @SETTINGS
-    @given(a=states(M=1), b=states(M=1), c=states(M=1), d=states(M=1))
-    def test_product_states_multiply(self, a, b, c, d):
-        """A genuinely two-mode evaluation of the formula against the product of single-mode closed forms."""
-        f = a.tensor(b).fidelity(c.tensor(d))
-        # pure factors inside mixed products: the √ε sensitivity of the fidelity (docstring) -> 3e-7
-        pure_factor = any(x.is_pure() for x in (a, b, c, d))
-        assert math.isclose(f, scutaru(a, c) * scutaru(b, d), rel_tol=3e-7 if pure_factor else 1e-11, abs_tol=1e-14)
+    @given(a=states(M=1), b=states(M=1), c=states(M=1), d=states(M=1), data=st.data())
+    def test_product_states_multiply(self, a, b, c, d, data):
+        """Two-mode products, pure factors included, against single-mode exact values; then the same
+        pair after a common entangling symplectic map and displacement (fidelity is invariant), so that
+        pure modes are entangled with mixed ones in the input covariances."""
+        expected = exact_single(a, c) * exact_single(b, d)
+        x, y = a.tensor(b), c.tensor(d)
+        assert math.isclose(x.fidelity(y), expected, rel_tol=1e-11, abs_tol=1e-14)
+        rng = np.random.default_rng(data.draw(st.integers(0, 2**32 - 1)))
+        S = cv.beamsplitter(rng.uniform(0, 3), rng.uniform(0, 6)) @ cv.two_mode_squeezing(rng.uniform(0, 0.8))
+        shift = rng.normal(size=4)
+        X = GaussianState(S @ x.mean + shift, S @ x.cov @ S.T)
+        Y = GaussianState(S @ y.mean + shift, S @ y.cov @ S.T)
+        assert math.isclose(X.fidelity(Y), expected, rel_tol=1e-10, abs_tol=1e-14)
+        assert math.isclose(Y.fidelity(X), expected, rel_tol=1e-10, abs_tol=1e-14)
+
+    def test_pure_tol_threshold(self):
+        """ν − ½ below the threshold counts as pure (the overlap); clearly above, the closed form."""
+        t = GaussianState.from_symplectic(cv.squeezing(0.3, 1.0), nu=0.9, mean=[0.2, -0.1])
+        nearly = GaussianState.from_symplectic(cv.squeezing(0.5), nu=0.5 + 1e-14, mean=[0.4, 0.3])
+        assert math.isclose(nearly.fidelity(t), nearly.overlap(t), rel_tol=1e-12)
+        slightly = GaussianState.from_symplectic(cv.squeezing(0.5), nu=0.5 + 1e-4, mean=[0.4, 0.3])
+        assert math.isclose(slightly.fidelity(t), scutaru(slightly, t), rel_tol=1e-9)
+        with pytest.raises(InputError):
+            t.fidelity(t, pure_tol=-1.0)
 
     def test_fidelity_never_exceeds_one(self):
         s = GaussianState.from_symplectic(cv.squeezing(1.0, 0.3), nu=1.3, mean=[1.0, -2.0])

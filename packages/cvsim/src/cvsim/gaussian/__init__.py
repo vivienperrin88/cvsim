@@ -6,6 +6,6 @@ S05–S07, after which the feature ``gaussian`` is listed in :data:`cvsim.FEATUR
 
 from __future__ import annotations
 
-from .states import GaussianState
+from .states import PURE_TOL, GaussianState
 
-__all__ = ["GaussianState"]
+__all__ = ["PURE_TOL", "GaussianState"]

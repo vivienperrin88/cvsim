@@ -58,7 +58,9 @@ compare them with qttlind.
 * **Purity** `Tr ρ² = 1/(2^M √det V)`. **Entropy** von Neumann, in **nats** by default
   (`entropy(base=2)` for bits).
 * **Fidelity** is the *squared* Uhlmann fidelity `F = (Tr √(√ρ σ √ρ))²` (= `|⟨ψ|φ⟩|²` for pure
-  states), as in qttlind. Mixed states use Banchi, Braunstein & Pirandola (2015).
+  states), as in qttlind. Pure Williamson modes (`ν − ½ < pure_tol · max(1, ‖S‖²)`, default
+  `PURE_TOL = 1e-12`) are projected out exactly, then mixed states use Banchi, Braunstein &
+  Pirandola (2015); this avoids the `√ε` amplification of round-off near `ν = ½`.
 * **Logarithmic negativity** `E_N = log‖ρ^{T_A}‖₁` in **bits** by default (`base=math.e` for
   nats), as in qttlind: the two-mode squeezed vacuum has `E_N = 2r / ln 2`.
 * **Photon moments**: `⟨n_k⟩`, `Cov(n_j, n_k)`, and `(⟨a⟩, ⟨a†a⟩, ⟨aa⟩)` with

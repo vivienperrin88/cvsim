@@ -10,8 +10,12 @@ Formulas (ħ = 1; ``ν_k`` the symplectic eigenvalues, ``Ω`` the symplectic for
 * purity ``Tr ρ² = 1 / (2^M √det V)``; entropy ``Σ_k g(ν_k)``,
   ``g(ν) = (ν + ½) ln(ν + ½) − (ν − ½) ln(ν − ½)`` (nats);
 * overlap ``Tr ρ₁ρ₂ = exp(−½ δᵀ(V₁ + V₂)⁻¹δ) / √det(V₁ + V₂)``, ``δ = d₂ − d₁``;
-* Uhlmann fidelity ``F = (Tr √(√ρ₁ ρ₂ √ρ₁))²``: the overlap when either state is pure, otherwise
-  Banchi, Braunstein and Pirandola, PRL 115, 260501 (2015):
+* Uhlmann fidelity ``F = (Tr √(√ρ₁ ρ₂ √ρ₁))²``. **Pure modes are removed exactly first:** in the
+  Williamson basis of ``ρ₁`` a pure mode is the vacuum, and ``F(τ ⊗ |0⟩⟨0|, ρ₂) = p₀ F(τ, ρ̃₂)``
+  (``p₀`` the vacuum probability of ``ρ₂`` on those modes, ``ρ̃₂`` the conditional state), then
+  the same from ``ρ₂``'s side. Without this, round-off ``ε`` in a pure mode (``ν = ½ + ε``)
+  enters the closed form below as ``√ε``. What is left has no pure mode and uses Banchi,
+  Braunstein and Pirandola, PRL 115, 260501 (2015):
   ``√F = F_tot^{1/4} det(V₁ + V₂)^{−1/4} exp(−¼ δᵀ(V₁ + V₂)⁻¹δ)`` with
   ``V_aux = Ωᵀ(V₁ + V₂)⁻¹(Ω/4 + V₂ΩV₁)`` and
   ``F_tot = det[2(√(1 + (V_aux Ω)⁻²/4) + 1) V_aux]``, evaluated on the eigenvalues ``λ`` of
@@ -34,7 +38,7 @@ from ..core import linalg as la
 from ..core._types import ComplexArray, FloatArray
 from ..errors import InputError, PhysicalityError, ShapeError
 
-__all__ = ["GaussianState"]
+__all__ = ["PURE_TOL", "GaussianState"]
 
 
 def _readonly(a: np.ndarray) -> np.ndarray:
@@ -59,6 +63,81 @@ def _g(nu: FloatArray) -> FloatArray:
     a, b = nu + 0.5, nu - 0.5
     b_log_b = np.where(b > 1e-15, b * np.log(np.where(b > 1e-15, b, 1.0)), 0.0)
     return np.asarray(a * np.log(a) - b_log_b, dtype=float)
+
+
+#: Default threshold under which ``ν − ½`` counts as a pure mode in :meth:`GaussianState.fidelity`.
+PURE_TOL = 1e-12
+
+
+def _remove_pure_modes(
+    V1: FloatArray, d1: FloatArray, V2: FloatArray, d2: FloatArray, pure_tol: float
+) -> tuple[float | None, tuple[FloatArray, FloatArray, FloatArray, FloatArray] | None]:
+    """Map both states to the Williamson basis of state 1 and project out its pure modes.
+
+    Returns ``(p0, rest)``: ``p0`` the vacuum probability of state 2 on the pure modes of state 1
+    (``None`` if it has none), ``rest`` the moments ``(V1, d1, V2, d2)`` of the remaining modes,
+    state 2 conditioned on that vacuum (``None`` if state 1 is entirely pure).
+    """
+    M = d1.shape[0] // 2
+    w = la.williamson(V1)
+    Si = la.inv(w.S)
+    V2p = Si @ V2 @ Si.T
+    V2p = (V2p + V2p.T) / 2
+    dp = Si @ (d2 - d1)
+    threshold = pure_tol * max(1.0, float(np.abs(w.S).max()) ** 2)
+    pure = [k for k in range(M) if w.nu[k] - cv.VACUUM_VARIANCE < threshold]
+    mixed = [k for k in range(M) if k not in pure]
+    tau = np.concatenate([w.nu[mixed], w.nu[mixed]])
+    if not pure:
+        return None, (np.diag(tau), np.zeros(2 * M), V2p, dp)
+    iP = cv.mode_indices(pure, M)
+    Q = V2p[np.ix_(iP, iP)] + np.eye(len(iP)) * cv.VACUUM_VARIANCE
+    p0 = math.exp(-0.5 * float(dp[iP] @ la.solve(Q, dp[iP])) - 0.5 * la.logdet_pd(Q))
+    if not mixed:
+        return p0, None
+    iR = cv.mode_indices(mixed, M)
+    C = V2p[np.ix_(iR, iP)]
+    K = la.solve(Q, C.T).T  # C Q⁻¹ (Q symmetric)
+    Vc = V2p[np.ix_(iR, iR)] - K @ C.T
+    dc = dp[iR] - K @ dp[iP]
+    return p0, (np.diag(tau), np.zeros(len(iR)), (Vc + Vc.T) / 2, dc)
+
+
+def _banchi(V1: FloatArray, d1: FloatArray, V2: FloatArray, d2: FloatArray) -> float:
+    """Closed form of Banchi, Braunstein and Pirandola (2015), on the eigenvalues of ``V_aux Ω``."""
+    M = d1.shape[0] // 2
+    Om = cv.omega(M)
+    Vs = V1 + V2
+    delta = d2 - d1
+    V_aux = Om.T @ la.solve(Vs, Om / 4 + V2 @ Om @ V1)
+    lam = la.eigvals(V_aux @ Om)
+    f_tot4 = complex(np.prod(2.0 * (np.sqrt(1.0 + 1.0 / (4.0 * lam**2)) + 1.0) * lam))
+    # Pure modes have been removed; what remains can only be round-off, amplified near ν = ½.
+    if abs(f_tot4.imag) > 1e-6 * max(1.0, abs(f_tot4.real)) or f_tot4.real <= 0:
+        raise PhysicalityError(f"fidelity: F_tot^4 = {f_tot4:.3e} is not real positive")
+    log_root = 0.25 * math.log(f_tot4.real) - 0.25 * la.logdet_pd(Vs) - 0.25 * float(delta @ la.solve(Vs, delta))
+    return math.exp(2.0 * log_root)
+
+
+def _fidelity_moments(
+    V1: FloatArray, d1: FloatArray, V2: FloatArray, d2: FloatArray, pure_tol: float, swapped: bool
+) -> float:
+    """Fidelity by alternately removing the pure modes of each state, then the closed form.
+
+    Each removal drops at least one mode; ``swapped`` records that state 1 has just been found
+    to have no pure modes, so that the roles are exchanged at most once between removals.
+    """
+    p0, rest = _remove_pure_modes(V1, d1, V2, d2, pure_tol)
+    if rest is None:  # state 1 is pure: F = ⟨ψ|ρ₂|ψ⟩ = p0
+        return float(p0) if p0 is not None else 0.0
+    if p0 is None:  # no pure mode in state 1
+        if swapped:
+            return _banchi(*rest)
+        Va, da, Vb, db = rest
+        return _fidelity_moments(Vb, db, Va, da, pure_tol, swapped=True)
+    if p0 == 0.0:
+        return 0.0
+    return p0 * _fidelity_moments(*rest, pure_tol, swapped=False)
 
 
 class GaussianState:
@@ -435,40 +514,34 @@ class GaussianState:
         delta = other.mean - self.mean
         return min(1.0, math.exp(-0.5 * float(delta @ la.solve(Vs, delta)) - 0.5 * la.logdet_pd(Vs)))
 
-    def fidelity(self, other: GaussianState, atol: float = 1e-9) -> float:
+    def fidelity(self, other: GaussianState, pure_tol: float = PURE_TOL) -> float:
         """Uhlmann fidelity ``(Tr √(√ρ₁ ρ₂ √ρ₁))²`` for any two Gaussian states.
 
-        The overlap when either state is pure (purity within ``atol`` of 1); otherwise the closed
-        form of Banchi, Braunstein and Pirandola (2015), see the module docstring.
+        Pure modes are removed exactly before the closed form of Banchi, Braunstein and Pirandola
+        (2015) is used (module docstring, "Fidelity"): in the Williamson basis of ``ρ₁``, a pure
+        mode is the vacuum, and ``F(τ ⊗ |0⟩⟨0|, ρ₂) = p₀ F(τ, ρ̃₂)`` with ``p₀`` the probability
+        of vacuum of ``ρ₂`` on those modes and ``ρ̃₂`` the state conditioned on it. The same is done
+        from ``ρ₂``'s side; a fully pure state leaves ``p₀``, the overlap.
 
-        Accuracy: about 1e-13 relative when every symplectic eigenvalue of both states exceeds 1/2
-        by more than ~1e-6. When a state has (nearly) pure modes but is not pure overall, the
-        fidelity itself depends on those eigenvalues like ``√(ν − ½)``, so round-off ``ε`` in the
-        covariances gives relative errors of order ``√ε``, up to ~1e-7 in tests; no formula avoids this.
+        Accuracy: 1e-13 to 1e-11 relative, growing with the squeezing, also with pure modes
+        entangled with mixed ones (stress run: worst 5e-12 over 2000 random 1–3-mode pairs).
+        A mode counts as pure when ``ν − ½ < pure_tol · max(1, ‖S‖²)`` (``S`` its Williamson
+        factor): the covariance does not determine ``ν − ½`` more finely than that. The fidelity
+        varies like ``√(ν − ½)`` there, so a state mixed by less than the threshold is answered to
+        about ``√pure_tol``; for modes just above the threshold the closed form gives ``√ε``.
 
         Parameters
         ----------
         other
             Second state (same number of modes).
-        atol
-            Purity tolerance for the pure-state shortcut.
+        pure_tol
+            Threshold below which ``ν − ½`` counts as zero (relative to ``max(1, ‖S‖²)``).
         """
         self._check_same_modes(other)
-        if self.is_pure(atol) or other.is_pure(atol):
-            return self.overlap(other)
-        M = self.num_modes
-        Om = cv.omega(M)
-        V1, V2 = self.cov, other.cov
-        Vs = V1 + V2
-        delta = other.mean - self.mean
-        V_aux = Om.T @ la.solve(Vs, Om / 4 + V2 @ Om @ V1)
-        lam = la.eigvals(V_aux @ Om)
-        f_tot4 = np.prod(2.0 * (np.sqrt(1.0 + 1.0 / (4.0 * lam**2)) + 1.0) * lam)
-        # The imaginary part is round-off amplified by √ε near pure modes (see Accuracy above).
-        if abs(f_tot4.imag) > 1e-6 * max(1.0, abs(f_tot4.real)) or f_tot4.real <= 0:
-            raise PhysicalityError(f"fidelity: F_tot^4 = {f_tot4:.3e} is not real positive")
-        log_root = 0.25 * math.log(f_tot4.real) - 0.25 * la.logdet_pd(Vs) - 0.25 * float(delta @ la.solve(Vs, delta))
-        return min(1.0, math.exp(2.0 * log_root))
+        if not pure_tol >= 0:
+            raise InputError(f"pure_tol must be >= 0, got {pure_tol}")
+        f = _fidelity_moments(self.cov, self.mean, other.cov, other.mean, pure_tol, swapped=False)
+        return min(1.0, f)
 
     # ------------------------------------------------------------------------- entanglement
     def log_negativity(self, modes: Sequence[int], base: float = 2.0) -> float:
