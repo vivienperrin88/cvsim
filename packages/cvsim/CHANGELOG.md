@@ -7,6 +7,17 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S04** — `cvsim.gaussian.GaussianState`: an immutable mean and covariance, validated against
+  the uncertainty principle (`PhysicalityError`). Constructors `vacuum`, `coherent`, `thermal`,
+  `squeezed` (multimode), `two_mode_squeezed`, `from_symplectic(S, nu, mean)`, `product`,
+  `from_hbar`, `from_xpxp`; `reduce`, `tensor`, `to_hbar`, `to_xpxp`, `isclose`; symplectic
+  eigenvalues, purity, entropy, mean photons, photon covariance, complex moments; overlap and
+  general **mixed-state fidelity** (Banchi, Braunstein, Pirandola 2015, evaluated on
+  eigenvalues: no matrix square root); log-negativity; multimode Wigner function and single-mode
+  grids; vacuum probability. `core.linalg.eigvals` (general eigenvalues). Tested against the
+  Fock oracle (density matrices built from generators and Kraus maps), against closed forms
+  (thermal and Scutaru fidelities, products) on Hypothesis states, and against
+  `qttlind.gaussian.states/measure` (7 contract tests).
 - **S03b** — comparison with The Walrus, Strawberry Fields and MrMustard (CONVENTIONS.md,
   "Comparison with other libraries"): result layout, ordering, block order and gauge of Williamson,
   Bloch–Messiah, Takagi and the symplectic eigenvalues, side by side. Optional extra `compare`
