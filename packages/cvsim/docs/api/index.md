@@ -9,6 +9,7 @@ The subpackages are listed in dependency order as they are implemented.
 
    cvsim.errors
    cvsim.core
+   cvsim.gaussian
    cvsim.reference
 ```
 

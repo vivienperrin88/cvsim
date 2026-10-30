@@ -72,6 +72,14 @@ class TestKernels:
         assert np.allclose((U * w) @ U.conj().T, A, atol=1e-12)
         assert np.allclose(la.eigvalsh(A), w)
 
+    def test_eigvals_general(self, rng):
+        A = rng.normal(size=(5, 5))
+        lam = la.eigvals(A)
+        assert lam.dtype == complex and np.isclose(np.prod(lam), np.linalg.det(A))
+        assert np.allclose(np.sort_complex(lam), np.sort_complex(np.linalg.eigvals(A)))
+        with pytest.raises(ShapeError):
+            la.eigvals(np.ones((2, 3)))
+
     @pytest.mark.parametrize(
         ("A", "err"),
         [

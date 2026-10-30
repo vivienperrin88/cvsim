@@ -53,6 +53,7 @@ __all__ = [
     "cholesky",
     "degenerate_groups",
     "eigh",
+    "eigvals",
     "eigvalsh",
     "expm",
     "inv",
@@ -192,6 +193,18 @@ def eigvalsh(A: npt.ArrayLike) -> FloatArray:
         Real symmetric or complex Hermitian matrix.
     """
     return np.asarray(np.linalg.eigvalsh(_hermitian(A)), dtype=float)
+
+
+@_kernel("eigvals")
+def eigvals(A: npt.ArrayLike) -> np.ndarray:
+    """Eigenvalues of a general square matrix (complex, in LAPACK's order).
+
+    Parameters
+    ----------
+    A
+        Square real or complex matrix.
+    """
+    return np.asarray(np.linalg.eigvals(_square(A)), dtype=complex)
 
 
 @_kernel("svd")
