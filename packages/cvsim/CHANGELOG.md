@@ -7,6 +7,17 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S05** — `cvsim.gaussian.symplectic`: the gate matrices of the conventions (re-exported),
+  `from_hamiltonian` (`exp(−itH)` → `expm(tΩH)`), `is_passive`, `unitary_from_passive`,
+  `random_interferometer` (Haar), `random_symplectic`; **Clements mesh** `clements(U)` (rectangular,
+  `N(N−1)/2` cells of `BS(θ, 0)·R(φ)`, depth `N`, output phases; `gates()` in time order);
+  **state preparation** `preparation(state)` (thermal → `I(U₂)` → squeezers → `I(U₁)` →
+  displacement); **mode-basis change** `change_basis(state, U)` (supermodes, pulse shapes).
+  `cvsim.gaussian.ops`: `apply_symplectic`, `displace`, `rotate`, `squeeze`, `beamsplitter`,
+  `two_mode_squeeze`, `interferometer`, `cz`, `cx`, `shear`, `fourier`. Tested against the Fock
+  oracle (Heisenberg map of `exp(−itĤ)`, gate sequences on density matrices), on Haar-random and
+  degenerate unitaries (identity, permutations, phases, DFT), and against `qttlind.gaussian.ops`
+  (3 contract tests, including cvsim's Clements mesh executed with qttlind's gates).
 - **S04** — `cvsim.gaussian.GaussianState`: an immutable mean and covariance, validated against
   the uncertainty principle (`PhysicalityError`). Constructors `vacuum`, `coherent`, `thermal`,
   `squeezed` (multimode), `two_mode_squeezed`, `from_symplectic(S, nu, mean)`, `product`,

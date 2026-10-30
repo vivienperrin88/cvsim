@@ -51,6 +51,24 @@ compare them with qttlind.
 * **Contract** (`tests/contract`, marker `qttlind`): every rule above agrees with
   `qttlind.gaussian` to a few ulps (closed forms) or 1e-12 (short computations).
 
+## Symplectic library **[tested]**
+
+`cvsim.gaussian.symplectic` (matrices) and `cvsim.gaussian.ops` (gates applied to states):
+
+* **Composition.** Gates `g₁, g₂, …` applied in that order have `S = ⋯ S₂ S₁`; on states
+  `d → S d`, `V → S V Sᵀ`.
+* **Quadratic Hamiltonians.** `from_hamiltonian(H, t)` is the gate `exp(−i t H)` with
+  `H = ½ rᵀ H r`: `S = expm(t Ω H)`. `H = −I` gives `R(t)`; `H = −[[0, 1], [1, 0]]` gives `S(t, 0)`.
+* **Clements mesh.** A cell on modes `(m, m+1)` is `T(θ, φ) = BS(θ, 0) · R_m(φ)`, unitary
+  `[[e^{iφ} cos θ, −sin θ], [e^{iφ} sin θ, cos θ]]`; `U = diag(phases) · T_K ⋯ T_1` with
+  `N(N−1)/2` cells, depth `N`, `θ ∈ [0, π/2]`, `φ ∈ (−π, π]`. `Clements.gates()` lists the gates
+  in time order in the conventions of the gate table.
+* **State preparation.** `state = D(d) · I(U₁) · Sq(r) · I(U₂) · ⊗ thermal(ν)`, `r` descending,
+  `ν` ascending (Williamson, then Bloch–Messiah, with their gauge); `U₂ = I` for a pure state.
+* **Mode bases.** `change_basis(state, U)`: new mode `b_k = Σ_j conj(U_jk) a_j`, so column `k`
+  of `U` is the mode function of `b_k` in the old basis; `d' = S(U)ᵀ d`, `V' = S(U)ᵀ V S(U)`. The
+  supermodes of a state are the columns of the `U` of its Bloch–Messiah `O1`.
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

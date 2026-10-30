@@ -275,7 +275,7 @@ class GaussianState:
 
     @classmethod
     def from_symplectic(
-        cls, S: npt.ArrayLike, nu: float | Sequence[float] | None = None, mean: npt.ArrayLike | None = None
+        cls, S: npt.ArrayLike, nu: float | npt.ArrayLike | None = None, mean: npt.ArrayLike | None = None
     ) -> GaussianState:
         """The state ``V = S diag(ν, ν) Sᵀ`` with mean ``d``: a symplectic map applied to thermal modes.
 
