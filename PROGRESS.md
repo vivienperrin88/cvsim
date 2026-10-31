@@ -18,8 +18,8 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M2 | S08 | IR: `Program`, `Op` | **done** |
 | M2 | S09 | backend protocol; cvsim and qttlind Gaussian backends (switch); dense Fock backend | **done** |
 | M2 | S10 | PNR / click detectors; hafnians; heralding | **done** |
-| M3 | S11 | sources: JSA → Schmidt supermodes, SPOPO, single-pass waveguide with distributed loss, excess antisqueezing | in review |
-| M3 | S12–S15 | mode bases and pulse shaper, detectors and phase noise, TOML setups, R1/R3 | |
+| M3 | S11 | sources: JSA → Schmidt supermodes, SPOPO, single-pass waveguide with distributed loss, excess antisqueezing | **done** |
+| M3 | S12–S15 | mode bases and pulse shaper, detectors and phase noise, TOML setups, R1/R3 | next |
 | M4 | S16–S19 | networks, MBQC and feed-forward, routing, R2/R6/R10 | |
 | M5 | S20–S24 | Fock/LCG, MPS, subtraction hardware, cats/GKP, R5/R11 | |
 | M6 | S25–S28 | noisy GBS, reservoir computing, QML, R7/R8 | |
