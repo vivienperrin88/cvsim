@@ -47,3 +47,91 @@ def random_unitary(rng: np.random.Generator, n: int) -> np.ndarray:
     z = rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))
     q, r = np.linalg.qr(z)
     return q * (np.diag(r) / np.abs(np.diag(r)))
+
+
+# ------------------------------------------------------------------------------- MrMustard bridge
+import json  # noqa: E402
+import os  # noqa: E402
+import subprocess  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+HBAR_REF = 2.0  # The Walrus and MrMustard
+_BRIDGE = Path(__file__).resolve().parents[1] / "reference" / "mrmustard_bridge.py"
+_REPO = Path(__file__).resolve().parents[4]
+
+
+def mrmustard_python() -> Path | None:
+    """Interpreter of the MrMustard reference environment: ``$CVSIM_MRMUSTARD_PYTHON``, else
+    ``<repo>/.reference-envs/mrmustard/bin/python`` (built by ``tools/setup_reference_envs.sh``)."""
+    env = os.environ.get("CVSIM_MRMUSTARD_PYTHON")
+    path = Path(env) if env else _REPO / ".reference-envs" / "mrmustard" / "bin" / "python"
+    return path if path.exists() else None
+
+
+class MrMustard:
+    """A persistent MrMustard process (TensorFlow is imported once per test session)."""
+
+    def __init__(self, python: Path):
+        self._proc = subprocess.Popen(
+            [str(python), str(_BRIDGE)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        self.versions = self("versions")
+
+    def __call__(self, fn: str, **args):
+        assert self._proc.stdin is not None and self._proc.stdout is not None
+        self._proc.stdin.write(json.dumps({"fn": fn, "args": args}, default=_encode) + "\n")
+        self._proc.stdin.flush()
+        reply = json.loads(self._proc.stdout.readline())
+        if "error" in reply:
+            raise RuntimeError(f"MrMustard bridge: {reply['error']}")
+        return _decode(reply["ok"])
+
+    def close(self) -> None:
+        if self._proc.stdin is not None:
+            self._proc.stdin.close()
+        self._proc.wait(timeout=30)
+
+
+def _encode(x):
+    a = np.asarray(x)
+    if np.iscomplexobj(a):
+        return {"re": a.real.tolist(), "im": a.imag.tolist()}
+    return a.tolist()
+
+
+def _decode(x):
+    if isinstance(x, dict):
+        if set(x) == {"re", "im"}:
+            return np.asarray(x["re"]) + 1j * np.asarray(x["im"])
+        return {k: _decode(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return np.asarray(x, dtype=float)
+    return x
+
+
+_mm: MrMustard | None = None
+
+
+def mrmustard() -> MrMustard:
+    """The shared bridge; skips the calling test if the reference environment is missing."""
+    global _mm
+    if _mm is None:
+        python = mrmustard_python()
+        if python is None:
+            pytest.skip("MrMustard reference environment not found (tools/setup_reference_envs.sh)")
+        _mm = MrMustard(python)
+    return _mm
+
+
+def to_ref(mean, cov):
+    """cvsim moments (ħ = 1) in the ħ = 2 convention of The Walrus and MrMustard."""
+    return np.asarray(mean) * np.sqrt(HBAR_REF), np.asarray(cov) * HBAR_REF
+
+
+def from_ref(mean, cov):
+    """ħ = 2 moments back to cvsim's ħ = 1."""
+    return np.asarray(mean) / np.sqrt(HBAR_REF), np.asarray(cov) / HBAR_REF

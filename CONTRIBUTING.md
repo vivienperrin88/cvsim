@@ -38,6 +38,13 @@ them once with `uv run pre-commit install`. Notebooks are committed **with** the
       expected and what was received; there is a test for it.
 - [ ] New numerics are checked against an independent reference (dense oracle, closed form, the
       other Gaussian engine, a measured convergence order) — values, not just "it runs".
+- [ ] **Reference baselines (cvsim, every session):** every Gaussian or CV feature that The Walrus
+      or MrMustard also implements is compared with both in `tests/contract`
+      (markers `thewalrus`, `mrmustard`; `packages/cvsim/tools/setup_reference_envs.sh` builds the
+      MrMustard environment), with the convention mapping stated in the test. A disagreement is
+      arbitrated by the Fock oracle or a closed form; an upstream error becomes an
+      `xfail(strict=True)` test naming it. `docs/design/equivalence.md` is updated in the same
+      session, including what neither library offers and how that part is checked instead.
 - [ ] No `numpy.linalg` / `scipy.linalg` call outside the package's `core/linalg.py` on a hot path.
 - [ ] A module imports only from its own layer or lower ones (`cvsim._layers`; enforced by
       `tests/test_guards.py` in cvsim, by review in qttlind).

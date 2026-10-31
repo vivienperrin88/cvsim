@@ -52,6 +52,7 @@ markers = [
     "slow: long-running tests (run with --runslow)",
     "qttlind: needs the optional qttlind package (skipped when it is not installed)",
     "thewalrus: compares with The Walrus (optional extra `compare`; skipped when it is not installed)",
+    "mrmustard: compares with MrMustard in its own environment (tools/setup_reference_envs.sh; skipped when absent)",
     "repro: reproduction of a published experiment (acceptance table in the matching notebook)",
 ]
 filterwarnings = [

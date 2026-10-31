@@ -50,6 +50,33 @@ jobs:
       - name: Test
         run: uv run pytest --cov ${{ github.event_name == 'schedule' && '--runslow' || '' }}
 
+  reference-baselines:
+    # cvsim against The Walrus (in the main environment) and MrMustard (its own environment):
+    # every session's Gaussian / CV features are compared with both (CONTRIBUTING.md).
+    needs: lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/cvsim
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - working-directory: .
+        run: uv sync --locked --no-group notebooks
+      - uses: actions/cache@v4
+        with:
+          path: .reference-envs
+          key: reference-envs-mrmustard-0.7.3-${{ runner.os }}
+      - run: PYTHON311=python3.11 tools/setup_reference_envs.sh
+      - name: Contract tests against The Walrus and MrMustard (no skips allowed)
+        shell: bash
+        run: uv run pytest tests/contract -m "thewalrus or mrmustard" -v -rs -p no:cacheprovider | tee baseline.log && ! grep -q SKIPPED baseline.log
+
   docs:
     needs: lint
     runs-on: ubuntu-latest

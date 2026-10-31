@@ -42,6 +42,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_qttlind)
         if "thewalrus" in item.keywords and not HAVE_THEWALRUS:
             item.add_marker(skip_thewalrus)
+        # "mrmustard" tests skip themselves through harness.mrmustard() when the environment is absent
 
 
 @pytest.fixture
