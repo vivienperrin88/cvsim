@@ -39,6 +39,7 @@ KNOWN_FEATURES: frozenset[str] = frozenset(
         "ir",  # S08
         "backends",  # S09
         "photon_counting",  # S10
+        "sources",  # S11 (JSA supermodes, SPOPO, waveguide, excess noise)
         "hardware",  # S11-S14
         "networks",  # S16
         "mbqc",  # S17
@@ -67,6 +68,7 @@ _implemented: set[str] = {
     "ir",
     "backends",
     "photon_counting",
+    "sources",
 }
 
 FEATURES: frozenset[str] = frozenset(_implemented)

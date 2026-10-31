@@ -137,6 +137,58 @@ are conditioned by the Schur complement `V_B' = V_B − K Σ Kᵀ`, `d_B' = d_B 
   the pattern; the IR measurements `PNR` and `Threshold` do the same in the Fock backend
   (outcomes sampled or post-selected).
 
+## Units and spectra **[tested]**
+
+`cvsim.core.units`. The hardware layer takes and returns **SI floats**: seconds, metres, hertz,
+angular frequencies in rad/s; `NM`, `MM`, `FS`, `MHZ`, … are scale factors (`2 * units.NM`).
+
+* Wavelength ↔ angular frequency `ω = 2πc/λ`; a wavelength bandwidth around `λ` is
+  `Δω = 2πc Δλ/λ²` (first order). Frequency `f` (Hz) ↔ `Ω = 2πf`.
+* Spectral widths are given as the **intensity FWHM** `Δ` (laboratory usage); the amplitude is
+  `exp(−Ω²/(2σ²))` with `σ = Δ/(2√ln 2)`.
+* Propagation loss in dB/cm ↔ power attenuation `κ` (1/m), `P(z) = P(0) e^{−κz}`:
+  `κ = α_dB · ln(10)/10 · 100`.
+* Detunings `Ω` are measured from the degenerate frequency `ω₀ = ω_p/2`; the pump detuning is
+  `Ω₊ = Ω_s + Ω_i`. Cavity linewidths are half widths at half maximum, in rad/s.
+
+## Sources **[tested]**
+
+`cvsim.hardware.jsa`, `.sources`, `.excess` (approved at the S11 check-in).
+
+* **JSA.** Degenerate type-0/I down-conversion only (symmetric JSA; type-II is refused and
+  deferred): `f(Ω_s, Ω_i) = α(Ω₊) φ(Ω_s, Ω_i)`. Phase matching from dispersion parameters only (no
+  Sellmeier data): `Δk L = τ Ω₊ + ½ β_p Ω₊² − ½ β_s (Ω_s² + Ω_i²)`, `τ = L(k'_p − k'_s)`,
+  `β = L k''`; `φ = sinc(ΔkL/2) e^{iΔkL/2}`, or `exp(−0.193 (ΔkL/2)²) e^{iΔkL/2}` (apodised /
+  Gaussian approximation, equal amplitude FWHM). The signal GVD `β_s` sets the width along
+  `Ω_s − Ω_i` and must be non-zero for a finite Schmidt number.
+* **Supermodes.** Pixel modes `a_j = √δ a(ω₀ + Ω_j)` on a uniform grid; `J_jk = f(Ω_j, Ω_k)`
+  normalised to `‖J‖_F = 1`; Takagi `J = U diag(s) Uᵀ` with degeneracy tolerance `1e-11`
+  (`SCHMIDT_RTOL`); supermode `b_k = Σ_j conj(U_jk) a_j` (column `k` of `U`, the convention of
+  `change_basis`), continuous mode function `U_jk/√δ`; Schmidt number `K = 1/Σ s_k⁴`. Supermodes
+  are kept until their weight reaches `1 − tol` (default `tol = 1e-8`, at most 32).
+* **Gain.** Undepleted pump, no time ordering: the source prepares
+  `exp(½ Σ (conj(Z_jk) a_j a_k − Z_jk a_j† a_k†))|0⟩`, `Z = (r₀/s₀) J`; supermode `k` is squeezed
+  in `x` by `r_k = r₀ s_k/s₀` (`r₀`: squeezing of supermode 0, the pump phase chosen so that it
+  is `x`).
+* **SPOPO** (below threshold, `σ = √(P/P_thr) ∈ [0, 1)`, `σ_k = σ s_k/s₀`): at analysis frequency
+  `Ω`, `S_∓ = 1 ∓ η 4σ_k/((1 ± σ_k)² + (Ω/γ)²)`, booked as squeezing
+  `e^{2r_k(Ω)} = ((1 + σ_k)² + x²)/((1 − σ_k)² + x²)` then loss `η` (`"OPO escape"`). From a
+  cavity (good-cavity limit): `η = T/(T + L)`, `γ = f_rep (T + L)/2` (rad/s, HWHM). No cavity
+  detuning, no intracavity dispersion.
+* **Waveguide**: squeezing accumulated uniformly in each supermode while a frequency-flat power
+  loss `κ` acts; exact per supermode: gate `S(r_k)`, then the channel `X = e^{−κℓ/2} I`,
+  `Y = (κℓ/2) diag((1 − e^{−(2r + κℓ)})/(2r + κℓ), (e^{2r − κℓ} − 1)/(2r − κℓ))`
+  (`"waveguide propagation loss"`), then a lumped output coupling. `effective_transmissivity` is
+  the lumped loss costing the same squeezing.
+* **Excess noise** (kind `"excess"`): phase-sensitive `Y = diag(0, ε_k)` at the source output,
+  `ε₀` raising the antisqueezing of supermode 0 by the requested dB, `ε_k = ε₀ r_k/r₀` (default)
+  or constant; gain fluctuations `r ~ N(r_k, (g r_k)²)` with exact second moments
+  (`⟨e^{±2r}⟩ = e^{±2r_k + 2σ²}`; the waveguide's propagation noise averaged by 48-node
+  Gauss–Hermite), `ApproximationWarning`. `calibrate(sq_dB, anti_dB, η)` inverts the pure-loss
+  model `V_∓ = η e^{∓2r} + 1 − η` and returns the excess (shot-noise units and dB) at the
+  measurement point.
+* **Ledger order**: squeezing gate → gain fluctuations → source losses → excess antisqueezing.
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

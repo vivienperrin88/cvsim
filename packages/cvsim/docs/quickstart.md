@@ -72,3 +72,33 @@ fock = run(prog.bind(r=0.5) >> op("Kerr", 0, kappa=0.1), cutoff=12)  # non-Gauss
 print(gaussian.backend, fock.backend, fock.state.mean_photons())
 print(Program.from_json(prog.to_json()) == prog)
 ```
+
+## Sources (S11)
+
+A synchronously pumped OPO: the JSA of its crystal gives the supermodes, the cavity their
+squeezing, and every imperfection is booked in the noise ledger. All inputs are SI values.
+
+```python
+from cvsim.core import units as u
+from cvsim.hardware import excess, jsa, sources
+
+pump = jsa.Pump.gaussian(u.angular_bandwidth(2 * u.NM, 397.5 * u.NM))  # 2 nm FWHM at 397.5 nm
+crystal = jsa.PhaseMatching.sinc(gvm=400 * u.FS, gvd_signal=300 * u.FS**2, gvd_pump=400 * u.FS**2)
+grid = jsa.FrequencyGrid.centered(240, 6.0e14)  # detunings from ω₀, rad/s
+modes = jsa.schmidt_decomposition(jsa.joint_spectral_amplitude(pump, crystal, grid), grid, max_modes=8)
+print(round(modes.schmidt_number, 1), modes.coefficients[:3])  # K ≈ 21.7
+
+opo = sources.SPOPO.from_cavity(modes, repetition_rate=76 * u.MHZ, transmission=0.2, loss=0.01, pump=0.5)
+out = opo.output(omega=u.angular(1 * u.MHZ), excess=excess.ExcessNoise(antisqueezing_db=0.5))
+squeezed, antisqueezed = out.quadrature_db()
+print(squeezed[:3], antisqueezed[:3])  # dB per supermode
+for row in out.ledger.budget(mode=0, phi=0.0):
+    print(f"{row.label:22s} {row.variance:.4f}")
+
+# a single-pass waveguide with 0.2 dB/cm over 10 mm, 8.7 dB of lossless squeezing
+guide = sources.Waveguide(modes, length=10 * u.MM, loss_db_per_cm=0.2, r0=1.0, output_coupling=0.9)
+print(guide.effective_transmissivity()[:3], guide.output().quadrature_db()[0][:3])
+
+# from a measurement back to the model: −4.5 dB / +7.0 dB with a known efficiency of 0.85
+print(excess.calibrate(-4.5, 7.0, efficiency=0.85))
+```
