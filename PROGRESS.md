@@ -13,7 +13,7 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M1 | S03b | decompositions compared with The Walrus / Strawberry Fields / MrMustard; contract tests vs The Walrus | **done** |
 | M1 | S04 | `GaussianState` | **done** |
 | M1 | S05 | symplectic library (incl. Clements) | **done** |
-| M1 | S06 | channels `(X, Y)` + `NoiseLedger` | in review |
+| M1 | S06 | channels `(X, Y)` + `NoiseLedger` | **done** |
 | M1 | S07 | multimode homodyne / heterodyne; full Gaussian contract suite vs `qttlind.gaussian` | next |
 | M2 | S08 | IR: `Program`, `Op` | |
 | M2 | S09 | backend protocol; cvsim and qttlind Gaussian backends (switch); dense Fock backend | |
