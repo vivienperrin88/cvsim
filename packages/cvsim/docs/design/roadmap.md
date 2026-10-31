@@ -3,7 +3,9 @@
 Approved plan. Each session is one branch with its tests, a changelog entry and an update of
 `PROGRESS.md`; it is merged when every gate is green and reviewed by the project owner before the
 next one starts. **⏸** marks a planned mid-session check-in. Contract tests compare cvsim with
-qttlind (marker `qttlind`); the reference oracle is `cvsim.reference`.
+qttlind (marker `qttlind`); the reference oracle is `cvsim.reference`. **From S07 on, every session
+also compares its Gaussian and CV features with The Walrus and MrMustard, the reference baselines
+(markers `thewalrus`, `mrmustard`), and updates `docs/design/equivalence.md`.**
 
 ## M0 — Foundations
 

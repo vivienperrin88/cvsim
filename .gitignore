@@ -27,3 +27,4 @@ runs/
 **/docs/api/generated/
 **/docs/tutorials/notebooks/
 jupyter_execute/
+.reference-envs/

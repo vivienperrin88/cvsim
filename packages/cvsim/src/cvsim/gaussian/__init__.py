@@ -5,15 +5,14 @@
   mode-basis changes (S05);
 * :mod:`.ops` — gates applied to states (S05);
 * :mod:`.channels` — :class:`GaussianChannel` ``(X, Y)`` and phase diffusion (S06);
-* :mod:`.ledger` — :class:`NoiseLedger`, the exact noise budget of a chain (S06).
-
-Measurements follow in S07, after which the feature ``gaussian`` is listed in
-:data:`cvsim.FEATURES`.
+* :mod:`.ledger` — :class:`NoiseLedger`, the exact noise budget of a chain (S06);
+* :mod:`.measure` — homodyne (any angle, any local-oscillator mode), heterodyne, general-dyne,
+  with detector efficiency and electronic noise (S07).
 """
 
 from __future__ import annotations
 
-from . import channels, ledger, ops, symplectic
+from . import channels, ledger, measure, ops, symplectic
 from .channels import GaussianChannel
 from .ledger import NoiseLedger
 from .states import PURE_TOL, GaussianState
@@ -25,6 +24,7 @@ __all__ = [
     "NoiseLedger",
     "channels",
     "ledger",
+    "measure",
     "ops",
     "symplectic",
 ]

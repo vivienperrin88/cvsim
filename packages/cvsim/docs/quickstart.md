@@ -1,7 +1,7 @@
 # Quick start
 
-The Gaussian core arrives in milestone M1 (sessions S04–S07). States, gates and the symplectic
-library are available now:
+The Gaussian core (milestone M1): states, gates, the symplectic library, channels with a noise
+ledger, and measurements.
 
 ```python
 import math
@@ -50,4 +50,10 @@ budget = (
 for row in budget.budget(mode=0, phi=0.0):  # shot-noise units; the fractions add up to 1
     print(f"{row.label:12s} {row.variance:.4f}  {row.fraction:.0%}")
 print(budget.db_recovered("OPO escape"))  # what-if, not additive
+
+# measurement: homodyne on one half of a two-mode squeezed state steers the other half
+from cvsim.gaussian import measure
+
+res = measure.homodyne(tms, mode=0, phi=0.0, efficiency=0.9, electronic=0.01, outcome=0.8)
+print(res.density, res.state.mean)  # conditional state of mode 1
 ```

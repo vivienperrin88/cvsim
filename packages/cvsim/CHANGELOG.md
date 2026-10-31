@@ -7,6 +7,28 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S07** — `cvsim.gaussian.measure`: `general_dyne` (any Gaussian measurement `y = L r_A + ξ`),
+  `homodyne` (any angle, one or several modes jointly), `heterodyne` (outcome `α`, density per
+  `d²α`), `homodyne_lo` (local oscillator in any mode function), `homodyne_density`,
+  `sample_homodyne`; detector efficiency and electronic noise (`homodyne_noise`). Tested against the
+  Fock oracle (conditional states, Husimi densities), against explicit optical models of the
+  detector (loss + noise + ideal homodyne; the eight-port heterodyne), and against
+  `qttlind.gaussian.measure`. Features `gaussian`, `channels` and `gaussian_measure` are now listed
+  in `cvsim.FEATURES`.
+- **Reference baselines (S07)** — The Walrus and MrMustard are compared with every Gaussian / CV
+  feature from now on. MrMustard 0.7.3 runs in its own environment
+  (`tools/setup_reference_envs.sh`, git-ignored `.reference-envs/`) behind a JSON-lines bridge
+  (`tests/reference/mrmustard_bridge.py`), marker `mrmustard`; new contract files
+  `test_contract_mrmustard.py` (gates, states, purity, mixed fidelity, photon numbers, entropy,
+  log-negativity, channels, CPTP application, composition, homodyne and heterodyne conditioning)
+  and `test_contract_thewalrus_gaussian.py` (gates, `expand`, states, fidelity, entropy, photon
+  moments, vacuum element, reduction, validity, log-negativity, loss). Four MrMustard errors were
+  found and pinned as strict xfails (multimode symplectic eigenvalues and hence entropy and
+  log-negativity, the photon-number covariance of displaced correlated modes, channel
+  composition), plus documented differences (two-mode squeezing phase, units, finite-squeezing
+  homodyne, The Walrus' `reduced_gaussian` ordering). `docs/design/equivalence.md` is now the
+  four-way report (qttlind, The Walrus, MrMustard, oracle); CI job `reference-baselines` runs
+  these comparisons with no skips allowed.
 - **S06** — `cvsim.gaussian.GaussianChannel` `(X, Y, c)`: complete-positivity check, `then`,
   `tensor`, `embed`, `apply`; `loss`, `amplifier`, `additive_noise`, `from_transfer` (lossy linear
   optics), `from_ancilla` (gate with an ancilla, traced out), `from_symplectic`, `identity`.
