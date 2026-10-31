@@ -7,6 +7,12 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S08** — `cvsim.ir` (feature `ir`): `Op` validated against the registry `SPECS` (preparations
+  Vacuum, Coherent, Squeezed, Thermal, Fock; gates D, R, S, P, F, BS, S2, CZ, CX, Interferometer,
+  Symplectic, Kerr; channels Loss, Amplifier, AdditiveNoise, PhaseNoise; measurements Homodyne,
+  Heterodyne), with noise-ledger provenance; `Parameter` placeholders; immutable `Program`
+  (named `Mode` register, `>>` composition in time order, `bind`, measured-mode tracking and
+  reuse checks, Gaussianity) and its versioned JSON form (`cvsim.ir/1`). Hypothesis round trips.
 - **S07** — `cvsim.gaussian.measure`: `general_dyne` (any Gaussian measurement `y = L r_A + ξ`),
   `homodyne` (any angle, one or several modes jointly), `heterodyne` (outcome `α`, density per
   `d²α`), `homodyne_lo` (local oscillator in any mode function), `homodyne_density`,

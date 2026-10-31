@@ -70,6 +70,13 @@ Each is reproduced by a test; cvsim's value is confirmed by the Fock oracle or b
 | The Walrus 0.22 | `reduced_gaussian` returns the state unchanged when every mode is listed | `reduced_gaussian(…, [1, 0])` does not reorder; cvsim's `reduce([1, 0])` does | `test_reduced_gaussian_ignores_the_order_of_a_full_mode_list` |
 | The Walrus 0.22, Strawberry Fields 0.23 | decomposition ordering and gauge left to LAPACK | see CONVENTIONS.md, "Comparison with other libraries" | `test_contract_thewalrus.py` |
 
+## S08: the intermediate representation
+
+`cvsim.ir` is data only and has no counterpart to compare numbers with. Its design follows
+MrMustard's left-to-right `>>` composition (`a >> b`: `a` first) but keeps programs immutable;
+the semantics of every operation are compared with The Walrus and MrMustard when programs are
+executed by the backends (S09).
+
 ## Only in cvsim, and how it is checked
 
 | Feature | Check |
