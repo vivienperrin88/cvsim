@@ -1,0 +1,557 @@
+"""Joint spectral amplitude (JSA) of degenerate down-conversion and its Schmidt supermodes.
+
+A χ⁽²⁾ crystal pumped around ``2ω₀`` couples pairs of frequencies ``ω₀ + Ω_s`` and ``ω₀ + Ω_i``
+with the amplitude (CONVENTIONS.md, "Sources")
+
+    f(Ω_s, Ω_i) = α(Ω_s + Ω_i) · φ(Ω_s, Ω_i),
+
+the product of the pump spectral amplitude ``α`` and the phase-matching function ``φ``. In
+degenerate type-0 or type-I down-conversion signal and idler are the same field, so ``f`` is
+symmetric. Phase matching is parametrised by the crystal's dispersion only (no Sellmeier data):
+
+    Δk L = τ Ω₊ + ½ β_p Ω₊² − ½ β_s (Ω_s² + Ω_i²),     Ω₊ = Ω_s + Ω_i,
+
+with ``τ = L (k'_p − k'_s)`` the group-velocity mismatch (s), ``β_p = L k''_p`` and
+``β_s = L k''_s`` the group-delay dispersions of pump and signal (s²). The first-order term depends
+on ``Ω₊`` only; the signal GVD ``β_s`` alone sets the bandwidth along ``Ω_s − Ω_i``, so it must be
+non-zero for a finite number of modes.
+
+On a uniform grid of detunings (spacing ``δ``) the pixel modes ``a_j = √δ a(ω₀ + Ω_j)`` see the
+symmetric matrix ``J_jk = f(Ω_j, Ω_k)``, normalised to ``‖J‖_F = 1``. Its Takagi factorisation
+``J = U diag(s) Uᵀ`` (:func:`cvsim.core.linalg.takagi`) gives the Schmidt coefficients ``s_k``
+(``Σ s_k² = 1``, descending) and the **supermodes** ``b_k = Σ_j conj(U_jk) a_j``: column ``k`` of
+``U`` is the mode function of supermode ``k`` (the convention of
+:func:`cvsim.gaussian.symplectic.change_basis`), sampled on the grid; ``U_jk/√δ`` is the continuous
+function, ``∫|u_k|² dΩ = 1``. The Schmidt number is ``K = 1/Σ s_k⁴``.
+
+Undepleted pump, no time ordering: a source of gain ``G`` produces the state
+``exp(½ Σ_jk (conj(Z_jk) a_j a_k − Z_jk a_j† a_k†))|0⟩`` with ``Z = G J``, i.e. supermode ``k``
+squeezed in ``x`` by ``r_k = G s_k``. Sources (:mod:`cvsim.hardware.sources`) give the gain
+through the squeezing ``r₀`` of supermode 0: ``r_k = r₀ s_k/s₀``.
+"""
+
+from __future__ import annotations
+
+import math
+import warnings
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+import numpy as np
+import numpy.typing as npt
+
+from ..core import linalg as la
+from ..core import units
+from ..core._types import ComplexArray, FloatArray
+from ..errors import ApproximationWarning, InputError
+
+__all__ = [
+    "SCHMIDT_RTOL",
+    "SINC_GAUSSIAN_GAMMA",
+    "FrequencyGrid",
+    "PhaseMatching",
+    "Pump",
+    "Supermodes",
+    "joint_spectral_amplitude",
+    "schmidt_decomposition",
+    "supermodes",
+]
+
+#: Width parameter of the Gaussian approximation of ``sinc``: ``sinc x ≈ exp(−γ x²)``, both ½ at
+#: ``x ≈ 1.8955`` (equal amplitude FWHM; U'Ren et al. 2005).
+SINC_GAUSSIAN_GAMMA = 0.193
+
+#: Degeneracy tolerance of the Schmidt decomposition. Schmidt coefficients span many decades;
+#: Takagi's default (``1e-8``) would merge every coefficient below ``1e-8 s₀`` into the null group,
+#: costing a reconstruction error of that size. Much smaller values split clusters of tiny,
+#: nearly equal coefficients whose singular vectors are ill-determined, and ``U`` loses unitarity
+#: (``3e-11`` at ``1e-12`` on a 240-point sinc JSA). ``1e-11`` keeps both errors near ``5e-12``;
+#: exactly degenerate coefficients (the sideband pairs of the CW limit) still group.
+SCHMIDT_RTOL = 1e-11
+
+_Spectrum = Callable[[FloatArray], ComplexArray]
+_Joint = Callable[[FloatArray, FloatArray], ComplexArray]
+
+
+def _finite(name: str, value: float) -> float:
+    v = float(value)
+    if not math.isfinite(v):
+        raise InputError(f"{name} must be finite, got {value}")
+    return v
+
+
+def _readonly(a: np.ndarray) -> np.ndarray:
+    a.setflags(write=False)
+    return a
+
+
+# ------------------------------------------------------------------------------- frequency grid
+class FrequencyGrid:
+    """Uniform grid of detunings ``Ω_j`` (rad/s) from the degenerate frequency ``ω₀``.
+
+    Parameters
+    ----------
+    detunings
+        Strictly increasing, uniformly spaced detunings (rad/s), at least 2.
+    """
+
+    __slots__ = ("_detunings",)
+
+    def __init__(self, detunings: npt.ArrayLike):
+        d = np.array(detunings, dtype=float).reshape(-1)
+        if d.size < 2 or not np.all(np.isfinite(d)):
+            raise InputError(f"a frequency grid needs at least 2 finite detunings, got {d.size}")
+        steps = np.diff(d)
+        if steps.min() <= 0 or (steps.max() - steps.min()) > 1e-9 * steps.mean():
+            raise InputError("detunings must be strictly increasing and uniformly spaced")
+        self._detunings = _readonly(d)
+
+    @classmethod
+    def centered(cls, n: int, half_span: float) -> FrequencyGrid:
+        """``n`` points from ``−half_span`` to ``+half_span`` (symmetric: ``Ω_j + Ω_{n−1−j} = 0``).
+
+        Parameters
+        ----------
+        n
+            Number of points, >= 2.
+        half_span
+            Largest detuning (rad/s), > 0.
+        """
+        if int(n) != n or n < 2:
+            raise InputError(f"n must be an integer >= 2, got {n}")
+        h = _finite("half_span", half_span)
+        if h <= 0:
+            raise InputError(f"half_span must be > 0, got {half_span}")
+        return cls(np.linspace(-h, h, int(n)))
+
+    @classmethod
+    def auto(
+        cls,
+        pump: Pump,
+        phase_matching: PhaseMatching,
+        n: int | None = None,
+        extent: float = 4.0,
+        points_per_width: int = 2,
+        max_points: int = 2048,
+    ) -> FrequencyGrid:
+        """A centred grid that contains and resolves the JSA.
+
+        ``w₊`` is the JSA's half width along the diagonal ``Ω_s = Ω_i`` (the narrower of the pump's
+        and the phase matching's) and ``w₋`` along the anti-diagonal ``Ω_s = −Ω_i`` (phase matching
+        only); the support lies within ``|Ω| <= extent (w₊ + w₋)``, the half span. By default the
+        number of points puts ``points_per_width`` points across ``w₊`` (at most ``max_points``);
+        a grid coarser than that raises an :class:`~cvsim.errors.ApproximationWarning`.
+
+        Parameters
+        ----------
+        pump
+            Pump spectrum.
+        phase_matching
+            Phase-matching function.
+        n
+            Number of points (default: from the resolution).
+        extent
+            Half span in units of ``w₊ + w₋``, > 0.
+        points_per_width
+            Resolution target: points across ``w₊``.
+        max_points
+            Cap on the automatic number of points.
+        """
+        ext = _finite("extent", extent)
+        if ext <= 0:
+            raise InputError(f"extent must be > 0, got {extent}")
+        w_plus = min(pump.half_width / 2.0, phase_matching.half_width_sum)
+        w_minus = phase_matching.half_width_difference
+        if not math.isfinite(w_minus):
+            raise InputError(
+                "the phase matching is unbounded along Ω_s − Ω_i (signal GVD β_s = 0): give gvd_signal "
+                "or an explicit FrequencyGrid"
+            )
+        half = ext * (w_plus + w_minus)
+        if n is None:
+            n = min(int(max_points), max(64, math.ceil(2 * half * points_per_width / w_plus) + 1))
+        grid = cls.centered(n, half)
+        if grid.step > w_plus / points_per_width * (1 + 1e-12):
+            warnings.warn(
+                f"FrequencyGrid.auto: step {grid.step:.3e} rad/s does not resolve the JSA's narrow half "
+                f"width {w_plus:.3e} rad/s with {points_per_width} points; increase n (now {n})",
+                ApproximationWarning,
+                stacklevel=2,
+            )
+        return grid
+
+    @property
+    def detunings(self) -> FloatArray:
+        """Detunings ``Ω_j`` (rad/s, read-only)."""
+        return self._detunings
+
+    @property
+    def step(self) -> float:
+        """Spacing ``δ`` (rad/s)."""
+        d = self._detunings
+        return float((d[-1] - d[0]) / (d.size - 1))
+
+    @property
+    def size(self) -> int:
+        """Number of points."""
+        return int(self._detunings.size)
+
+    def __repr__(self) -> str:
+        d = self._detunings
+        return f"FrequencyGrid(n={d.size}, from {d[0]:.4e} to {d[-1]:.4e} rad/s)"
+
+
+# ------------------------------------------------------------------------------- pump
+@dataclass(frozen=True)
+class Pump:
+    """Spectral amplitude ``α(Ω₊)`` of the pump, as a function of its detuning ``Ω₊`` from ``2ω₀``.
+
+    Build it with :meth:`gaussian` or :meth:`sampled`. ``half_width`` is the half width at half
+    maximum of ``|α|²`` (rad/s), used to size grids.
+    """
+
+    amplitude: _Spectrum
+    half_width: float
+    description: str = ""
+
+    @classmethod
+    def gaussian(cls, fwhm: float, chirp: float = 0.0) -> Pump:
+        """Gaussian pump of intensity FWHM ``fwhm``, with an optional quadratic spectral phase.
+
+        ``α(Ω) = exp(−Ω²/(2σ²) + i chirp Ω²/2)``, ``σ = fwhm/(2√ln 2)``
+        (:func:`cvsim.core.units.amplitude_sigma_from_fwhm`); ``chirp`` is the group-delay
+        dispersion of the pump pulse (s²). A wavelength FWHM converts with
+        :func:`cvsim.core.units.angular_bandwidth`.
+
+        Parameters
+        ----------
+        fwhm
+            Intensity FWHM of the pump spectrum (rad/s), > 0.
+        chirp
+            Quadratic spectral phase (s²).
+        """
+        sigma = units.amplitude_sigma_from_fwhm(fwhm)
+        c = _finite("chirp", chirp)
+
+        def amplitude(w: FloatArray) -> ComplexArray:
+            return np.exp(-(w**2) / (2 * sigma**2) + 0.5j * c * w**2)
+
+        return cls(amplitude, float(fwhm) / 2.0, f"gaussian(fwhm={float(fwhm):.4e}, chirp={c:.4e})")
+
+    @classmethod
+    def sampled(cls, detunings: npt.ArrayLike, amplitudes: npt.ArrayLike) -> Pump:
+        """A measured or shaped pump spectrum, interpolated linearly (real and imaginary parts), zero
+        outside the samples.
+
+        Parameters
+        ----------
+        detunings
+            Strictly increasing pump detunings ``Ω₊`` (rad/s).
+        amplitudes
+            Complex spectral amplitudes at those detunings (any normalisation).
+        """
+        w = np.array(detunings, dtype=float).reshape(-1)
+        a = np.array(amplitudes, dtype=complex).reshape(-1)
+        if w.size < 2 or w.shape != a.shape:
+            raise InputError(f"need >= 2 detunings and as many amplitudes, got {w.size} and {a.size}")
+        if not (np.all(np.isfinite(w)) and np.all(np.isfinite(a))) or np.any(np.diff(w) <= 0):
+            raise InputError("detunings must be finite and strictly increasing, amplitudes finite")
+        if not np.any(a):
+            raise InputError("the pump amplitude is zero everywhere")
+        w.setflags(write=False)
+        a.setflags(write=False)
+
+        def amplitude(x: FloatArray) -> ComplexArray:
+            re = np.interp(x, w, a.real, left=0.0, right=0.0)
+            im = np.interp(x, w, a.imag, left=0.0, right=0.0)
+            return np.asarray(re + 1j * im, dtype=complex)
+
+        half = float(max(abs(w[0]), abs(w[-1])))
+        return cls(amplitude, half, f"sampled({w.size} points)")
+
+
+# ------------------------------------------------------------------------------- phase matching
+@dataclass(frozen=True)
+class PhaseMatching:
+    """Phase-matching function ``φ(Ω_s, Ω_i)`` of a crystal of given dispersion.
+
+    Build it with :meth:`sinc` or :meth:`gaussian`. ``half_width_sum`` and
+    ``half_width_difference`` are the detunings of the first zero (``sinc``) or of the matching
+    ``1/e`` point (``gaussian``) along the diagonal ``Ω_s = Ω_i`` and the anti-diagonal
+    ``Ω_s = −Ω_i`` (``inf`` when unbounded), used to size grids.
+    """
+
+    function: _Joint
+    half_width_sum: float
+    half_width_difference: float
+    gvm: float
+    gvd_signal: float
+    gvd_pump: float
+    shape: str
+
+    @staticmethod
+    def _dk_l(gvm: float, gvd_signal: float, gvd_pump: float) -> _Joint:
+        def dk_l(ws: FloatArray, wi: FloatArray) -> ComplexArray:
+            wp = ws + wi
+            return np.asarray(gvm * wp + 0.5 * gvd_pump * wp**2 - 0.5 * gvd_signal * (ws**2 + wi**2), dtype=complex)
+
+        return dk_l
+
+    @staticmethod
+    def _widths(gvm: float, gvd_signal: float, gvd_pump: float) -> tuple[float, float]:
+        # first zero of sinc(ΔkL/2): |ΔkL/2| = π. Diagonal Ω_s = Ω_i = Ω: ΔkL = 2τΩ + (2β_p − β_s)Ω²;
+        # anti-diagonal Ω_s = −Ω_i = Ω: ΔkL = −β_s Ω².
+        b = 2 * gvd_pump - gvd_signal
+        lin = math.pi / abs(gvm) if gvm else math.inf
+        quad = math.sqrt(2 * math.pi / abs(b)) if b else math.inf
+        diff = math.sqrt(2 * math.pi / abs(gvd_signal)) if gvd_signal else math.inf
+        return min(lin, quad), diff
+
+    @classmethod
+    def _build(cls, gvm: float, gvd_signal: float, gvd_pump: float, shape: str) -> PhaseMatching:
+        t, bs, bp = _finite("gvm", gvm), _finite("gvd_signal", gvd_signal), _finite("gvd_pump", gvd_pump)
+        dk_l = cls._dk_l(t, bs, bp)
+        if shape == "sinc":
+
+            def function(ws: FloatArray, wi: FloatArray) -> ComplexArray:
+                x = dk_l(ws, wi).real / 2
+                return np.asarray(np.sinc(x / np.pi) * np.exp(1j * x), dtype=complex)
+
+        else:
+
+            def function(ws: FloatArray, wi: FloatArray) -> ComplexArray:
+                x = dk_l(ws, wi).real / 2
+                return np.exp(-SINC_GAUSSIAN_GAMMA * x**2 + 1j * x)
+
+        w_sum, w_diff = cls._widths(t, bs, bp)
+        return cls(function, w_sum, w_diff, t, bs, bp, shape)
+
+    @classmethod
+    def sinc(cls, gvm: float, gvd_signal: float, gvd_pump: float = 0.0) -> PhaseMatching:
+        """Uniformly poled (or birefringent) crystal: ``φ = sinc(ΔkL/2) e^{iΔkL/2}``.
+
+        Parameters
+        ----------
+        gvm
+            Group-velocity mismatch ``τ = L (k'_p − k'_s)`` (s).
+        gvd_signal
+            Group-delay dispersion ``β_s = L k''_s`` at the signal (s²); non-zero for a finite JSA.
+        gvd_pump
+            Group-delay dispersion ``β_p = L k''_p`` at the pump (s²).
+        """
+        return cls._build(gvm, gvd_signal, gvd_pump, "sinc")
+
+    @classmethod
+    def gaussian(cls, gvm: float, gvd_signal: float, gvd_pump: float = 0.0) -> PhaseMatching:
+        """Apodised poling, or the Gaussian approximation of :meth:`sinc`:
+        ``φ = exp(−γ (ΔkL/2)²) e^{iΔkL/2}``, ``γ = 0.193`` (same amplitude FWHM as the sinc).
+
+        Parameters
+        ----------
+        gvm
+            Group-velocity mismatch ``τ`` (s).
+        gvd_signal
+            Group-delay dispersion ``β_s`` at the signal (s²).
+        gvd_pump
+            Group-delay dispersion ``β_p`` at the pump (s²).
+        """
+        return cls._build(gvm, gvd_signal, gvd_pump, "gaussian")
+
+
+# ------------------------------------------------------------------------------- JSA and supermodes
+def joint_spectral_amplitude(pump: Pump, phase_matching: PhaseMatching, grid: FrequencyGrid) -> ComplexArray:
+    """``f(Ω_j, Ω_k) = α(Ω_j + Ω_k) φ(Ω_j, Ω_k)`` on the grid (not normalised).
+
+    Parameters
+    ----------
+    pump
+        Pump spectrum.
+    phase_matching
+        Phase-matching function.
+    grid
+        Detunings of signal and idler.
+    """
+    w = grid.detunings
+    ws, wi = np.meshgrid(w, w, indexing="ij")
+    f = pump.amplitude(ws + wi) * phase_matching.function(ws, wi)
+    return np.asarray(f, dtype=complex)
+
+
+@dataclass(frozen=True)
+class Supermodes:
+    """Schmidt decomposition of a degenerate JSA on a frequency grid.
+
+    Attributes
+    ----------
+    grid
+        The frequency grid.
+    jsa
+        The JSA as a pixel matrix ``J``, normalised to ``‖J‖_F = 1`` (read-only).
+    coefficients
+        All Schmidt coefficients ``s_k`` (descending, ``Σ s_k² = 1``).
+    unitary
+        Full Takagi unitary ``U`` (``J = U diag(s) Uᵀ``): column ``k`` is supermode ``k`` on the grid.
+    kept
+        Number of supermodes kept (the leading ones).
+    """
+
+    grid: FrequencyGrid
+    jsa: ComplexArray
+    coefficients: FloatArray
+    unitary: ComplexArray
+    kept: int
+    groups: list[npt.NDArray[np.int64]] = field(repr=False, default_factory=list)
+
+    @property
+    def schmidt_number(self) -> float:
+        """``K = 1/Σ s_k⁴`` (from every coefficient; 1 for a separable JSA)."""
+        return float(1.0 / np.sum(self.coefficients**4))
+
+    @property
+    def modes(self) -> ComplexArray:
+        """Kept supermodes as orthonormal pixel vectors, ``grid.size x kept`` (columns)."""
+        return self.unitary[:, : self.kept]
+
+    @property
+    def functions(self) -> ComplexArray:
+        """Kept supermodes as functions of the detuning, ``U_jk/√δ`` (``∫|u_k|² dΩ = 1``)."""
+        return self.modes / math.sqrt(self.grid.step)
+
+    @property
+    def dropped_weight(self) -> float:
+        """``1 − Σ_{k < kept} s_k²``: the share of the JSA in the supermodes left out."""
+        return float(max(0.0, 1.0 - np.sum(self.coefficients[: self.kept] ** 2)))
+
+    def squeezing(self, r0: float) -> FloatArray:
+        """Squeezing parameters ``r_k = r₀ s_k/s₀`` of the kept supermodes for a gain giving ``r₀`` to
+        supermode 0.
+
+        Parameters
+        ----------
+        r0
+            Squeezing parameter of supermode 0 (nepers), >= 0.
+        """
+        r = _finite("r0", r0)
+        if r < 0:
+            raise InputError(f"r0 must be >= 0, got {r0}")
+        return np.asarray(r * self.coefficients[: self.kept] / self.coefficients[0], dtype=float)
+
+    def coupling(self, r0: float) -> ComplexArray:
+        """Pixel-basis squeezing matrix ``Z = (r₀/s₀) J``: the source prepares
+        ``exp(½ Σ (conj(Z_jk) a_j a_k − Z_jk a_j† a_k†))|0⟩`` (every supermode, none dropped).
+
+        Parameters
+        ----------
+        r0
+            Squeezing parameter of supermode 0 (nepers), >= 0.
+        """
+        r = _finite("r0", r0)
+        if r < 0:
+            raise InputError(f"r0 must be >= 0, got {r0}")
+        return np.asarray(r / self.coefficients[0] * self.jsa, dtype=complex)
+
+
+def schmidt_decomposition(
+    jsa: npt.ArrayLike,
+    grid: FrequencyGrid,
+    *,
+    tol: float = 1e-8,
+    max_modes: int = 32,
+    edge_tol: float = 1e-3,
+    rtol: float = SCHMIDT_RTOL,
+) -> Supermodes:
+    """Supermodes of a symmetric (degenerate) JSA sampled on ``grid``.
+
+    The matrix is normalised to ``‖J‖_F = 1`` and Takagi-factorised; the leading supermodes are kept
+    until their weight ``Σ s_k²`` reaches ``1 − tol``, at most ``max_modes``. An
+    :class:`~cvsim.errors.ApproximationWarning` is raised when the JSA is not contained in the grid
+    (``|J|²`` on the boundary above ``edge_tol`` times its maximum): widen the grid.
+
+    Parameters
+    ----------
+    jsa
+        ``n x n`` complex symmetric matrix ``f(Ω_j, Ω_k)`` (e.g. from :func:`joint_spectral_amplitude`).
+    grid
+        The grid it is sampled on (``n`` points).
+    tol
+        Weight that may be dropped, in ``[0, 1)``; 0 keeps every supermode (up to ``max_modes``).
+    max_modes
+        Largest number of supermodes kept, >= 1.
+    edge_tol
+        Largest boundary intensity, relative to the maximum, accepted silently.
+    rtol
+        Degeneracy tolerance of the Takagi factorisation (default :data:`SCHMIDT_RTOL`).
+
+    Raises
+    ------
+    InputError
+        The JSA is not symmetric (non-degenerate type-II down-conversion is not modelled), is zero,
+        or does not match the grid.
+    """
+    J: ComplexArray = np.array(jsa, dtype=complex)
+    n = grid.size
+    if J.shape != (n, n):
+        raise InputError(f"jsa must be {n} x {n} to match the grid, got shape {J.shape}")
+    if not np.all(np.isfinite(J)):
+        raise InputError("jsa must be finite")
+    norm = float(np.sqrt(np.sum(np.abs(J) ** 2)))
+    if norm == 0.0:
+        raise InputError("the JSA is zero on the grid (pump and phase matching do not overlap)")
+    J = np.asarray(J / norm, dtype=complex)
+    asym = float(np.abs(J - J.T).max())
+    if asym > 1e-10:
+        raise InputError(
+            f"the JSA is not symmetric (max |J − Jᵀ| = {asym:.2e} for ‖J‖ = 1): only degenerate type-0/I "
+            "down-conversion is modelled (type-II is deferred)"
+        )
+    if not 0 <= tol < 1:
+        raise InputError(f"tol must be in [0, 1), got {tol}")
+    if int(max_modes) != max_modes or max_modes < 1:
+        raise InputError(f"max_modes must be an integer >= 1, got {max_modes}")
+    J = np.asarray((J + J.T) / 2, dtype=complex)
+    J.setflags(write=False)
+    intensity = np.abs(J) ** 2
+    edge = max(intensity[0].max(), intensity[-1].max(), intensity[:, 0].max(), intensity[:, -1].max())
+    if edge > edge_tol * intensity.max():
+        warnings.warn(
+            f"schmidt_decomposition: the JSA reaches the grid boundary (|J|² there = {edge / intensity.max():.2e} "
+            "of its maximum); widen the grid",
+            ApproximationWarning,
+            stacklevel=2,
+        )
+    tk = la.takagi(J, rtol=rtol)
+    s = np.asarray(tk.s, dtype=float)
+    weight = np.cumsum(s**2)
+    kept = n if tol == 0 else int(np.searchsorted(weight, (1.0 - tol) * weight[-1]) + 1)
+    kept = min(kept, int(max_modes), n)
+    U = np.asarray(tk.U, dtype=complex)
+    for a in (s, U):
+        a.setflags(write=False)
+    return Supermodes(grid, J, s, U, kept, tk.groups)
+
+
+def supermodes(
+    pump: Pump,
+    phase_matching: PhaseMatching,
+    grid: FrequencyGrid | None = None,
+    *,
+    tol: float = 1e-8,
+    max_modes: int = 32,
+) -> Supermodes:
+    """JSA of ``pump`` and ``phase_matching`` and its Schmidt supermodes, in one call.
+
+    Parameters
+    ----------
+    pump
+        Pump spectrum.
+    phase_matching
+        Phase-matching function.
+    grid
+        Frequency grid (default :meth:`FrequencyGrid.auto`).
+    tol
+        Weight that may be dropped.
+    max_modes
+        Largest number of supermodes kept.
+    """
+    g = FrequencyGrid.auto(pump, phase_matching) if grid is None else grid
+    return schmidt_decomposition(joint_spectral_amplitude(pump, phase_matching, g), g, tol=tol, max_modes=max_modes)
