@@ -14,7 +14,7 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M1 | S04 | `GaussianState` | **done** |
 | M1 | S05 | symplectic library (incl. Clements) | **done** |
 | M1 | S06 | channels `(X, Y)` + `NoiseLedger` | **done** |
-| M1 | S07 | multimode homodyne / heterodyne; full Gaussian contract suite vs `qttlind.gaussian` | in review |
+| M1 | S07 | multimode homodyne / heterodyne; full Gaussian contract suite vs `qttlind.gaussian`; reference baselines (The Walrus, MrMustard) | **done** |
 | M2 | S08 | IR: `Program`, `Op` | next |
 | M2 | S09 | backend protocol; cvsim and qttlind Gaussian backends (switch); dense Fock backend | |
 | M2 | S10 | PNR / click detectors | |
