@@ -97,7 +97,7 @@ class TestErrors:
 
 
 # ------------------------------------------------------------------------------- doctests
-DOCTEST_MODULES = ["cvsim.core.conventions", "cvsim.core.linalg"]
+DOCTEST_MODULES = ["cvsim.core.conventions", "cvsim.core.linalg", "cvsim.core.units"]
 
 
 @pytest.mark.parametrize("module", DOCTEST_MODULES)
