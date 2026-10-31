@@ -25,6 +25,7 @@ installation
 tutorials/index
 design/architecture
 design/roadmap
+design/equivalence
 conventions
 api/index
 changelog

@@ -89,6 +89,24 @@ compare them with qttlind.
   separate what-if view; such numbers do not sum to the total loss of squeezing. Phase-diffusion
   entries (the variance of the randomly rotated mean) are flagged `approximate`.
 
+## Measurements **[tested]**
+
+`cvsim.gaussian.measure`. One model: a measurement on modes `A` records `y = L r_A + ξ`,
+`ξ ~ N(0, N)`; the outcome has mean `L d_A` and covariance `Σ = L V_A Lᵀ + N`; the other modes
+are conditioned by the Schur complement `V_B' = V_B − K Σ Kᵀ`, `d_B' = d_B + K(y − μ)`,
+`K = V_{BA} Lᵀ Σ⁻¹`; the measured modes are consumed.
+
+* **Homodyne** of `x_φ = cos φ x + sin φ p` (`L = (cos φ, sin φ)`); several modes can be measured
+  jointly. **Heterodyne**: `L = I`, ideal `N = I/2`; outcome `α = (y_x + i y_p)/√2`, density per
+  `d²α` (the Husimi function `⟨α|ρ|α⟩/π` for an ideal detector).
+* **Detector**: efficiency `η` and electronic noise `v_el` (shot-noise units, per photodiode pair)
+  are loss and added noise before an ideal detector, the outcome **rescaled by `1/√η`** so that it
+  estimates the quadrature at the detector input. Added variance: `(1 − η + v_el)/(2η)` for
+  homodyne, `½ + (1 − η + v_el)/η` per quadrature for heterodyne (each arm sees half the signal).
+* **Local oscillator in any mode**: the measured mode is `b = Σ_j conj(f_j) a_j` (unit `f`); the
+  remaining modes are returned in a basis completing `f`, whose mode functions come with the
+  result. Mode mismatch (a non-normalised overlap) is a hardware model (S12), not accepted here.
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

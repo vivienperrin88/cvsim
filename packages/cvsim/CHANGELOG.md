@@ -7,6 +7,15 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S07** — `cvsim.gaussian.measure`: `general_dyne` (any Gaussian measurement `y = L r_A + ξ`),
+  `homodyne` (any angle, one or several modes jointly), `heterodyne` (outcome `α`, density per
+  `d²α`), `homodyne_lo` (local oscillator in any mode function), `homodyne_density`,
+  `sample_homodyne`; detector efficiency and electronic noise (`homodyne_noise`). Tested against the
+  Fock oracle (conditional states, Husimi densities), against explicit optical models of the
+  detector (loss + noise + ideal homodyne; the eight-port heterodyne), and against
+  `qttlind.gaussian.measure`. Features `gaussian`, `channels` and `gaussian_measure` are now listed
+  in `cvsim.FEATURES`. `docs/design/equivalence.md`: the cvsim ↔ qttlind equivalence report for
+  the Gaussian core (end of milestone M1).
 - **S06** — `cvsim.gaussian.GaussianChannel` `(X, Y, c)`: complete-positivity check, `then`,
   `tensor`, `embed`, `apply`; `loss`, `amplifier`, `additive_noise`, `from_transfer` (lossy linear
   optics), `from_ancilla` (gate with an ancilla, traced out), `from_symplectic`, `identity`.
