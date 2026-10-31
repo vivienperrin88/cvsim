@@ -7,6 +7,21 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S11** — sources (feature `sources`; subpackage `cvsim.hardware`, layer 3). `cvsim.core.units`:
+  SI scale factors and laboratory conversions (wavelength ↔ ω, Δλ ↔ Δω, Hz ↔ rad/s, dB/cm ↔ κ,
+  intensity FWHM ↔ amplitude σ). `cvsim.hardware.jsa`: `FrequencyGrid` (`centered`, `auto`),
+  `Pump` (`gaussian` with chirp, `sampled`), `PhaseMatching` (`sinc`, `gaussian`; GVM and GVD
+  parameters, no Sellmeier data), `joint_spectral_amplitude`, `schmidt_decomposition` →
+  `Supermodes` (Schmidt coefficients and number, mode functions, truncation, pixel coupling `Z`);
+  degenerate type-0/I only, type-II refused. `cvsim.hardware.sources`: `SPOPO` (`from_cavity`:
+  repetition rate, output coupler, loss; threshold, escape efficiency, linewidth; `spectrum`,
+  `output` at an analysis frequency), `Waveguide` (distributed loss solved exactly per supermode,
+  output coupling, `effective_transmissivity`), `SourceOutput` (state, `NoiseLedger`,
+  `quadrature_db`, `in_pixel_basis`). `cvsim.hardware.excess`: `ExcessNoise` (phase-sensitive
+  excess antisqueezing, gain fluctuations with exact second moments), `calibrate` (squeezing /
+  antisqueezing in dB → r, η, excess). Oracle `cvsim.reference.sources` (input–output theory of
+  the OPO, pixel-basis squeezer, Van Loan solution of the lossy Lyapunov equation). Contract tests
+  of the emitted states against qttlind, The Walrus and MrMustard (waveguide as Strang slices).
 - **S10** — photon counting (feature `photon_counting`). `cvsim.core.hafnian`: `permanent`
   (Glynn, Gray code), `hafnian` (power trace, or subset recursion), `loop_hafnian`, `torontonian`.
   `cvsim.gaussian.photon`: `husimi_parameters`, `pattern_probability`, `fock_density_matrix`

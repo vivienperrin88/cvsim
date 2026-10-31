@@ -1,6 +1,6 @@
 # Equivalence report: cvsim against qttlind, The Walrus and MrMustard
 
-Updated every session (CONTRIBUTING.md, "Reference baselines"); state after S09.
+Updated every session (CONTRIBUTING.md, "Reference baselines"); state after S11.
 
 cvsim is compared with three independent implementations:
 
@@ -50,6 +50,7 @@ mixed, squeezed up to `r = 1` per mode.
 | Gates on states | `gaussian.ops` | ✔ | via matrices | via matrices |
 | Channels | `GaussianChannel` | ✔ loss, amplifier, noise, CP check | ✔ loss, lossy linear optics, photon number after loss | ✔ loss, amplifier, noise, CPTP application, composition |
 | Measurements | `gaussian.measure` | ✔ homodyne, heterodyne (ideal) | — | ✔ homodyne, heterodyne, general-dyne |
+| Source output states (S11) | `hardware.sources` in the pixel basis | ✔ rebuilt with its gates | ✔ rebuilt with its gates; waveguide as slices | ✔ rebuilt as a lab circuit; waveguide as slices |
 
 Test files: `test_contract_{conventions,states,ops,channels,measure}.py` (qttlind),
 `test_contract_thewalrus.py` and `test_contract_thewalrus_gaussian.py` (The Walrus),
@@ -108,6 +109,38 @@ Detector models are those of MrMustard: efficiency is a loss channel before an i
 (binomial thinning of the count); PNR dark counts are Poissonian and add to the count; a
 threshold detector clicks with probability `p_dark` with no light, independently of the photons.
 
+## S11: sources
+
+None of the three libraries models a source: no JSA or Schmidt decomposition, no OPO cavity
+(threshold, escape efficiency, squeezing spectrum), no distributed loss, no excess-noise model
+(read from the sources of The Walrus 0.22, MrMustard 0.7.3 and qttlind, October 2026; qttlind's
+`circuits.hardware` only clips squeezing at a maximum in dB). They do implement the state a source
+emits, so the contract is that state in the frequency-pixel basis (`SourceOutput.in_pixel_basis`),
+rebuilt gate by gate from the source's own `r_k`, `η` and supermode unitary `U`:
+
+| Comparison | Test | Agreement |
+| --- | --- | --- |
+| SPOPO output at an analysis frequency: `S(r_k(Ω))`, loss `η`, interferometer `S(U)` on 8 pixels (4 supermodes, 4 in vacuum) — qttlind `gaussian.ops`, The Walrus `symplectic` (+ `photon_number_mean` per pixel), MrMustard `SqueezedVacuum`, `Attenuator`, `Interferometer` | `test_contract_sources.py` | 1e-12 relative (qttlind, The Walrus), 1e-11 (MrMustard) |
+| Phase-sensitive excess antisqueezing `diag(0, ε_k)` added to the covariance in The Walrus (MrMustard's `AdditiveNoise` is phase-insensitive only) | `test_contract_sources.py` (`thewalrus`) | 1e-12 relative |
+| Waveguide with distributed loss vs a Strang product of `N` slices `loss · S(r/N) · loss` in The Walrus and in MrMustard: the splitting error is below 1e-3 at `N = 40` and falls by 4.0 (±5 %) from `N = 20` to `N = 40` | `test_contract_sources.py` | `O(1/N²)` as expected |
+
+What neither library offers is checked against closed forms and the independent oracle
+`cvsim.reference.sources` (NumPy/SciPy only, no cvsim import), in `tests/test_jsa.py` and
+`tests/test_sources.py`:
+
+| Feature | Check | Agreement |
+| --- | --- | --- |
+| Schmidt decomposition of a Gaussian JSA | Mehler's formula: `s_n = √(1 − μ²)|μ|ⁿ`, `K = (A² + B²)/(2AB)`, Hermite–Gauss modes of width `√(AB/2)` | 1e-12 (coefficients, K), 1e-9 (sampled mode shapes) |
+| CW limit (pump narrower than the grid step) | anti-diagonal JSA: degenerate sideband pairs on `±Ω`, `s ∝ |φ(Ω, −Ω)|` | 1e-14 |
+| Supermodes → pixel state | Takagi route vs the oracle's pixel-Hamiltonian squeezer `expm(ΩH)`, itself measured in the Fock oracle on two modes | 1e-11; Fock 1e-9 |
+| SPOPO spectra and state, every supermode | oracle: Langevin equations and input–output theory (transfer functions, vacuum inputs at both ports); limits `σ → 1`, `Ω → ∞`, η = 1 (pure) | 1e-13 |
+| Waveguide closed form | oracle: pixel-basis Lyapunov equation solved by Van Loan's exponential; Strang slices of S06 channels (`O(1/N²)`) | 1e-11 relative |
+| Gain fluctuations | Monte Carlo of the mixture; `⟨e^{±2r}⟩` closed form; waveguide average by direct quadrature over `r` | 5e-3 (MC), 1e-14, 1e-10 |
+| Excess antisqueezing and calibration | requested dB reproduced; `calibrate` inverts the pure-loss model and recovers the excess of the model | 1e-12 |
+| Physical default crystal (2 nm pump at 397.5 nm, τ = 400 fs, β_s = 300 fs², β_p = 400 fs²) | Schmidt number converged under grid refinement (K ≈ 21.7) | 1e-5 relative |
+
+No upstream issue was found in S11.
+
 ## Only in cvsim, and how it is checked
 
 | Feature | Check |
@@ -118,6 +151,7 @@ threshold detector clicks with probability `p_dark` with no light, independently
 | `from_transfer`, `from_ancilla`, phase diffusion | The Walrus `passive_transformation`; ancilla closed forms; exact dephasing in the Fock oracle |
 | `NoiseLedger` | exact sum identity and direct application on Hypothesis chains |
 | Detector efficiency and electronic noise, local oscillator in any mode, joint sampling | explicit optical models (loss + noise + ideal homodyne; the eight-port heterodyne), Fock oracle |
+| JSA, Schmidt supermodes, SPOPO, waveguide, excess noise, calibration (S11) | closed forms and `cvsim.reference.sources`, see "S11: sources" |
 
 ## Only in the references (for now)
 
