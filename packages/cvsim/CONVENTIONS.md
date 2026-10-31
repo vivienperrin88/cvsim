@@ -119,6 +119,24 @@ are conditioned by the Schur complement `V_B' = V_B − K Σ Kᵀ`, `d_B' = d_B 
   thermal amplifier `(G, n̄)` = loss `G/G'`, gain `G' = G + (G − 1) n̄`; additive noise `σ²` = loss
   `1/G`, gain `G = 1 + σ²`. Phase noise is exact dephasing `ρ_nm e^{−σ²(n−m)²/2}`.
 
+## Photon counting **[tested]**
+
+`cvsim.core.hafnian` and `cvsim.gaussian.photon`.
+
+* **Fock elements** of a Gaussian state: with `Q = σ_c + I/2` (`σ_c` the covariance of
+  `(a, a†)`), `A = X(I − Q⁻¹)`, `γ = X Q⁻¹ β` and `T = exp(−½ β† Q⁻¹ β)/√det Q`,
+  `⟨n|ρ|m⟩ = T lhaf(A_{(m⊕n)}; γ)/√(n! m!)`, computed by the recurrence
+  `√(k_i + 1) g_{k+e_i} = γ_i g_k + Σ_j A_ij √k_j g_{k−e_j}`. `fock_density_matrix` has the layout
+  of the Fock backend: `(n₁ n₂ …) × (m₁ m₂ …)`, mode 0 most significant.
+* **Threshold detectors**: `P(clicks on S, none elsewhere) = Σ_{Z ⊆ S} (−1)^{|Z|} p₀(rest ∪ Z)`
+  from vacuum probabilities of reduced states (the torontonian for zero mean).
+* **Detector models** (as MrMustard): efficiency `η` is a loss channel before an ideal detector;
+  PNR dark counts are Poissonian with mean `ν` and add to the count; a threshold detector clicks
+  with probability `p_dark` with no light, independently of the photons.
+* **Heralding**: `herald` returns the normalised state of the other modes and the probability of
+  the pattern; the IR measurements `PNR` and `Threshold` do the same in the Fock backend
+  (outcomes sampled or post-selected).
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

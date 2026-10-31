@@ -58,7 +58,16 @@ KNOWN_FEATURES: frozenset[str] = frozenset(
 )
 
 # A feature name is listed only when its API is complete and its tests pass.
-_implemented: set[str] = {"conventions", "linalg", "gaussian", "channels", "gaussian_measure", "ir", "backends"}
+_implemented: set[str] = {
+    "conventions",
+    "linalg",
+    "gaussian",
+    "channels",
+    "gaussian_measure",
+    "ir",
+    "backends",
+    "photon_counting",
+}
 
 FEATURES: frozenset[str] = frozenset(_implemented)
 

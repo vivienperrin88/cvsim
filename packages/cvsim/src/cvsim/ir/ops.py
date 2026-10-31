@@ -154,6 +154,22 @@ SPECS: Mapping[str, OpSpec] = {
         {"efficiency": 1.0, "electronic": 0.0, "outcome": None},
         doc="coherent-state projection",
     ),
+    "PNR": OpSpec(
+        "measure",
+        1,
+        {"efficiency": _EFF, "dark_counts": _real(0.0), "outcome": _optional(_int(0))},
+        {"efficiency": 1.0, "dark_counts": 0.0, "outcome": None},
+        gaussian=False,
+        doc="photon-number-resolving detector (Poissonian dark counts, mean ν)",
+    ),
+    "Threshold": OpSpec(
+        "measure",
+        1,
+        {"efficiency": _EFF, "dark_prob": _real(0.0, 0.999999), "outcome": _optional(_int(0))},
+        {"efficiency": 1.0, "dark_prob": 0.0, "outcome": None},
+        gaussian=False,
+        doc="click detector (outcome 0 or 1; dark-click probability)",
+    ),
 }
 
 _ARRAY_MODES = {"Interferometer": lambda a: a.shape[0], "Symplectic": lambda a: a.shape[0] // 2}

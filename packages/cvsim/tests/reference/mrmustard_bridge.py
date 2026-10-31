@@ -19,11 +19,15 @@ import sys
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 import numpy as np
+from mrmustard import math as mm_math
 from mrmustard import settings
+
+if len(sys.argv) > 1:  # MrMustard math backend ("numpy" by default; fixed once anything is computed)
+    mm_math.change_backend(sys.argv[1])
 from mrmustard.lab import gates as G
 from mrmustard.lab import states as S
 from mrmustard.lab.abstract import State
-from mrmustard.lab.detectors import Heterodyne, Homodyne
+from mrmustard.lab.detectors import Heterodyne, Homodyne, PNRDetector, ThresholdDetector
 from mrmustard.physics import gaussian as g
 
 
@@ -50,6 +54,7 @@ def fn_versions():
         "mrmustard": mrmustard.__version__,
         "thewalrus": thewalrus.__version__,
         "numpy": np.__version__,
+        "backend": mm_math.backend_name,
         "hbar": float(settings.HBAR),
         "homodyne_squeezing": float(settings.HOMODYNE_SQUEEZING),
     }
@@ -144,6 +149,26 @@ def fn_lab_measure(kind, cov, means, modes, **p):
     if isinstance(res, State):
         return {"cov": out(res.cov), "means": out(res.means), "norm": float(np.real(res._norm))}
     return {"prob": float(np.real(res))}
+
+
+def fn_count(kind, cov, means, modes, cutoffs, internal_cutoff, **p):
+    """``PNRDetector`` / ``ThresholdDetector`` applied with ``primal`` to the Gaussian state
+    ``(cov, means)``: the probability tensor (every mode measured) or the tensor
+    ``(outcomes…, kets…, bras…)`` of unnormalised conditional states. ``PNRDetector`` convolves
+    with the dark-count prior, which MrMustard implements only in its TensorFlow backend: run this
+    from a bridge started with ``tensorflow`` as argument."""
+    settings.PNR_INTERNAL_CUTOFF = int(internal_cutoff)
+    st = State(cov=arr(cov), means=arr(means), cutoffs=list(cutoffs))
+    if kind == "pnr":
+        det = PNRDetector(
+            efficiency=p["efficiency"],
+            dark_counts=p["dark_counts"],
+            modes=list(modes),
+            cutoffs=[int(internal_cutoff)] * len(modes),
+        )
+    else:
+        det = ThresholdDetector(efficiency=p["efficiency"], dark_count_prob=p["dark_prob"], modes=list(modes))
+    return {"tensor": out(np.asarray(det.primal(st)))}
 
 
 def _kwargs(kw):
