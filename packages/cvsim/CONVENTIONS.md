@@ -178,7 +178,9 @@ decompositions follow these rules:
   basis LAPACK happens to return.
 * **Physical projection.** `nearest_physical_covariance` raises every symplectic eigenvalue below
   `1/2` to `1/2` in the Williamson basis: the correction is pure added noise and vanishes for a
-  physical input. It is not the Frobenius-nearest physical matrix (a semidefinite program).
+  physical input (eigenvalues within `atol · max(1, max|V|)` below `1/2`, default `atol = 1e-12`,
+  are Williamson round-off and count as physical: the input is returned unchanged). It is not the
+  Frobenius-nearest physical matrix (a semidefinite program).
 
 ## Comparison with other libraries
 

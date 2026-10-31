@@ -715,7 +715,7 @@ def _lagrangian_basis(E: np.ndarray, Om: np.ndarray, k: int) -> np.ndarray:
     return np.column_stack(basis)
 
 
-def nearest_physical_covariance(V: npt.ArrayLike, floor: float = VACUUM_VARIANCE) -> FloatArray:
+def nearest_physical_covariance(V: npt.ArrayLike, floor: float = VACUUM_VARIANCE, atol: float = 1e-12) -> FloatArray:
     """A physical covariance obtained from ``V`` by *adding* the least noise in its symplectic basis.
 
     Write ``V = S diag(ν, ν) Sᵀ`` (Williamson) and raise every ``ν_k < 1/2`` to ``1/2``:
@@ -730,13 +730,17 @@ def nearest_physical_covariance(V: npt.ArrayLike, floor: float = VACUUM_VARIANCE
         Real symmetric ``2M x 2M`` matrix (e.g. a covariance estimated from noisy data).
     floor
         The minimal symplectic eigenvalue, ``1/2`` (vacuum) by default.
+    atol
+        Symplectic eigenvalues within ``atol · max(1, max|V|)`` below ``floor`` count as physical:
+        Williamson's round-off (a pure mode can come out as ``ν = ½ − 3e-14``) must not turn a
+        physical input into a projected one.
     """
     V_ = _covariance(V)
     w, U = eigh(V_)
     if w[0] <= 0:
         V_ = (U * np.clip(w, floor * 1e-3, None)) @ U.T
     nu, S, _ = williamson(V_)
-    if nu[0] >= floor:
+    if nu[0] >= floor - atol * max(1.0, float(np.abs(V_).max())):
         return V_
     nu2 = np.maximum(nu, floor)
     out = S @ np.diag(np.concatenate([nu2, nu2])) @ S.T
