@@ -107,6 +107,18 @@ are conditioned by the Schur complement `V_B' = V_B − K Σ Kᵀ`, `d_B' = d_B 
   remaining modes are returned in a basis completing `f`, whose mode functions come with the
   result. Mode mismatch (a non-normalised overlap) is a hardware model (S12), not accepted here.
 
+## Backends **[tested]**
+
+* A program runs from the vacuum; a measured mode is consumed until prepared again;
+  `Result.modes` lists the program modes of the final state, in register order.
+* Measurement outcomes given in the program are post-selected, the others sampled from `rng`.
+* `FockBackend`: density matrices, mode 0 most significant, cutoff `N` per mode. Gates are the
+  exponentials of their generators on the touched modes; `Interferometer` runs as its Clements
+  mesh and `Symplectic` as Bloch–Messiah. Every phase-insensitive channel is pure loss then a
+  quantum-limited amplifier: thermal loss `(η, n̄)` = loss `η/G'`, gain `G' = 1 + (1 − η) n̄`;
+  thermal amplifier `(G, n̄)` = loss `G/G'`, gain `G' = G + (G − 1) n̄`; additive noise `σ²` = loss
+  `1/G`, gain `G = 1 + σ²`. Phase noise is exact dephasing `ρ_nm e^{−σ²(n−m)²/2}`.
+
 ## Figures of merit **[tested]**
 
 `cvsim.gaussian.GaussianState`, checked against the Fock oracle and, where it has them, qttlind:

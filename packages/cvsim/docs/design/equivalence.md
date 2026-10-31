@@ -1,7 +1,6 @@
 # Equivalence report: cvsim against qttlind, The Walrus and MrMustard
 
-Updated every session (CONTRIBUTING.md, "Reference baselines"); state after S07, the end of the
-Gaussian core (milestone M1).
+Updated every session (CONTRIBUTING.md, "Reference baselines"); state after S09.
 
 cvsim is compared with three independent implementations:
 
@@ -76,6 +75,20 @@ Each is reproduced by a test; cvsim's value is confirmed by the Fock oracle or b
 MrMustard's left-to-right `>>` composition (`a >> b`: `a` first) but keeps programs immutable;
 the semantics of every operation are compared with The Walrus and MrMustard when programs are
 executed by the backends (S09).
+
+## S09: backends
+
+| Comparison | Test | Agreement |
+| --- | --- | --- |
+| `GaussianBackend("qttlind")` vs `GaussianBackend("cvsim")`, random 3-mode programs with every Gaussian operation and post-selected imperfect measurements | `test_contract_backends.py` (`qttlind`) | 1e-11 relative |
+| `GaussianBackend` vs the same circuits in MrMustard's lab gates (`Dgate`, `Rgate`, `Sgate`, `Pgate`, `BSgate`, `S2gate` with `φ + π`, `CZgate`, `CXgate`, `Interferometer`, `Ggate`, `Attenuator`, `Amplifier`, `AdditiveNoise` with `noise = 2σ²`) | `test_contract_backends.py` (`mrmustard`) | 1e-11 relative |
+| `FockBackend` vs MrMustard's Gaussian-to-Fock conversion and vs `thewalrus.quantum.density_matrix` (exact matrix elements) | `test_contract_backends.py` | truncation error: 6.8e-7, 8.2e-8, 1.0e-8, 1.2e-9 at cutoffs 24, 28, 32, 36 |
+| `FockBackend` vs MrMustard's own Fock simulation, with exact phase noise | `test_contract_backends.py` (`mrmustard`) | 1e-9 |
+| The Walrus vs MrMustard Fock conversion | `test_contract_backends.py` | 1e-13 |
+| Three engines (cvsim Gaussian, qttlind Gaussian, Fock) on the same programs | `tests/test_backends.py` | round-off; Fock moments 1e-8 at cutoff 24 |
+
+The Walrus' `density_matrix` tensor is ordered `(n₁, m₁, n₂, m₂, …)`; cvsim's density matrices
+are `(n₁ n₂ …) × (m₁ m₂ …)` (mode 0 most significant).
 
 ## Only in cvsim, and how it is checked
 

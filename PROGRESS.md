@@ -16,7 +16,7 @@ check-ins) is in [`packages/cvsim/docs/design/roadmap.md`](packages/cvsim/docs/d
 | M1 | S06 | channels `(X, Y)` + `NoiseLedger` | **done** |
 | M1 | S07 | multimode homodyne / heterodyne; full Gaussian contract suite vs `qttlind.gaussian`; reference baselines (The Walrus, MrMustard) | **done** |
 | M2 | S08 | IR: `Program`, `Op` | in review |
-| M2 | S09 | backend protocol; cvsim and qttlind Gaussian backends (switch); dense Fock backend | next |
+| M2 | S09 | backend protocol; cvsim and qttlind Gaussian backends (switch); dense Fock backend | in review |
 | M2 | S10 | PNR / click detectors | |
 | M3 | S11–S15 | sources (JSA → supermodes), mode bases and pulse shaper, detectors and phase noise, TOML setups, R1/R3 | |
 | M4 | S16–S19 | networks, MBQC and feed-forward, routing, R2/R6/R10 | |

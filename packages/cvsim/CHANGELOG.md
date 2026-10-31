@@ -7,6 +7,15 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S09** — `cvsim.backends` (feature `backends`): `Backend` protocol, `Result` (state, register
+  modes, outcomes with densities, noise ledger), `GaussianBackend(engine="cvsim" | "qttlind")`
+  (the D2 switch; cvsim's engine books every channel in a `NoiseLedger`), dense `FockBackend`
+  (`FockState`; every IR operation including Fock states, Kerr and exact phase noise; Clements and
+  Bloch–Messiah for interferometers and general Gaussian unitaries; Kraus forms of every
+  phase-insensitive channel; homodyne sampling; `CutoffWarning`), dispatcher `select_backend` /
+  `run`. Same programs agree on the three engines; against MrMustard (lab circuits, its Fock
+  conversion and Fock simulation) and The Walrus (`density_matrix`). `NoiseLedger.gate` accepts a
+  displacement (`shift`).
 - **S08** — `cvsim.ir` (feature `ir`): `Op` validated against the registry `SPECS` (preparations
   Vacuum, Coherent, Squeezed, Thermal, Fock; gates D, R, S, P, F, BS, S2, CZ, CX, Interferometer,
   Symplectic, Kerr; channels Loss, Amplifier, AdditiveNoise, PhaseNoise; measurements Homodyne,

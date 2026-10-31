@@ -11,6 +11,7 @@ The subpackages are listed in dependency order as they are implemented.
    cvsim.core
    cvsim.ir
    cvsim.gaussian
+   cvsim.backends
    cvsim.reference
 ```
 
