@@ -115,8 +115,15 @@ class NoiseLedger:
             raise InputError(f"operation acts on {m} mode(s), got modes {ms}")
         return ms
 
-    def gate(self, S: npt.ArrayLike, modes: Sequence[int] | int | None = None, component: str = "gate") -> NoiseLedger:
-        """Append a gate (no noise; it transforms the signal and every earlier contribution).
+    def gate(
+        self,
+        S: npt.ArrayLike,
+        modes: Sequence[int] | int | None = None,
+        component: str = "gate",
+        shift: npt.ArrayLike | None = None,
+    ) -> NoiseLedger:
+        """Append a gate ``d → S d + shift`` (no noise; it transforms the signal and every earlier
+        contribution; a displacement is ``S = I`` with a shift).
 
         Parameters
         ----------
@@ -126,8 +133,11 @@ class NoiseLedger:
             Modes it acts on (all by default).
         component
             Name, for the record.
+        shift
+            Displacement of the mean on ``modes`` (xxpp of those modes), default none.
         """
-        ch = GaussianChannel.from_symplectic(S)
+        base = GaussianChannel.from_symplectic(S)
+        ch = base if shift is None else GaussianChannel(base.X, base.Y, shift, validate=False)
         step = _Step("gate", component, "", self._modes(modes, ch.num_modes), ch)
         return NoiseLedger(self.initial, (*self.steps, step))
 

@@ -146,6 +146,37 @@ def fn_lab_measure(kind, cov, means, modes, **p):
     return {"prob": float(np.real(res))}
 
 
+def _kwargs(kw):
+    out = {}
+    for k, v in kw.items():
+        if isinstance(v, (dict, list)):
+            out[k] = arr(v)
+        elif isinstance(v, float):
+            out[k] = np.float64(v)
+        else:
+            out[k] = v
+    return out
+
+
+def fn_run_circuit(initial, ops, cutoffs=None, fock=False):
+    """Prepare ``initial`` (one ``[state class, kwargs]`` per mode), apply ``ops``
+    (``[gate class, kwargs, modes]``) in order; return the moments, or the density matrix in the
+    Fock basis (``cutoffs``). With ``fock=True`` the whole circuit runs in MrMustard's Fock
+    representation (its own Fock implementations of the gates and channels)."""
+    states = [getattr(S, name)(**_kwargs(kw)) for name, kw in initial]
+    state = states[0]
+    for st in states[1:]:
+        state = state & st
+    if fock:
+        state = State(dm=state.dm(cutoffs), modes=list(range(len(initial))))
+    for name, kw, modes in ops:
+        gate = getattr(G, name)(**_kwargs(kw), modes=list(modes))
+        state = state >> gate
+    if fock or cutoffs is not None:
+        return {"dm": out(np.asarray(state.dm(cutoffs)))}
+    return {"cov": out(state.cov), "means": out(state.means)}
+
+
 FUNCTIONS = {name[3:]: f for name, f in globals().items() if name.startswith("fn_")}
 
 

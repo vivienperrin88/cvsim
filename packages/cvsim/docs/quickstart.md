@@ -56,4 +56,19 @@ from cvsim.gaussian import measure
 
 res = measure.homodyne(tms, mode=0, phi=0.0, efficiency=0.9, electronic=0.01, outcome=0.8)
 print(res.density, res.state.mean)  # conditional state of mode 1
+
+# programs (cvsim.ir) run on any backend (cvsim.backends)
+from cvsim.backends import run
+from cvsim.ir import Parameter, Program, op
+
+prog = (
+    Program(["signal", "idler"])
+    >> op("Squeezed", 0, r=Parameter("r"))
+    >> op("BS", (0, 1), theta=math.pi / 4)
+    >> op("Loss", 1, eta=0.9, component="fibre", noise_kind="loss")
+)
+gaussian = run(prog.bind(r=0.5))  # Gaussian program: Gaussian backend, with a noise ledger
+fock = run(prog.bind(r=0.5) >> op("Kerr", 0, kappa=0.1), cutoff=12)  # non-Gaussian: Fock backend
+print(gaussian.backend, fock.backend, fock.state.mean_photons())
+print(Program.from_json(prog.to_json()) == prog)
 ```
