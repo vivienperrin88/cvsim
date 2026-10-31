@@ -28,3 +28,7 @@ runs/
 **/docs/tutorials/notebooks/
 jupyter_execute/
 .reference-envs/
+
+# Local assistant files: kept on each machine, never committed
+CLAUDE.md
+.claude/
