@@ -7,6 +7,17 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
 
 ### Added
 
+- **S10** — photon counting (feature `photon_counting`). `cvsim.core.hafnian`: `permanent`
+  (Glynn, Gray code), `hafnian` (power trace, or subset recursion), `loop_hafnian`, `torontonian`.
+  `cvsim.gaussian.photon`: `husimi_parameters`, `pattern_probability`, `fock_density_matrix`
+  (loop-hafnian recurrence), `pnr_distribution` (efficiency, Poissonian dark counts),
+  `click_probability` / `click_distribution` (efficiency, dark clicks), `herald` (heralded
+  non-Gaussian states with realistic detectors). IR measurements `PNR` and `Threshold`, run by the
+  Fock backend (sampled or post-selected). Brute-force and closed-form tests; contract tests against
+  `qttlind.gaussian.hafnian` / `.fock`, The Walrus (`hafnian`, `perm`, `tor`, `probabilities`,
+  `density_matrix`, `threshold_detection_prob`) and MrMustard's `PNRDetector` and
+  `ThresholdDetector` (bridge on MrMustard's TensorFlow backend). One MrMustard error pinned as a
+  strict xfail: its threshold dark-click kernel.
 - **S09** — `cvsim.backends` (feature `backends`): `Backend` protocol, `Result` (state, register
   modes, outcomes with densities, noise ledger), `GaussianBackend(engine="cvsim" | "qttlind")`
   (the D2 switch; cvsim's engine books every channel in a `NoiseLedger`), dense `FockBackend`

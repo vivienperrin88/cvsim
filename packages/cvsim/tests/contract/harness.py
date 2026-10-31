@@ -71,9 +71,9 @@ def mrmustard_python() -> Path | None:
 class MrMustard:
     """A persistent MrMustard process (TensorFlow is imported once per test session)."""
 
-    def __init__(self, python: Path):
+    def __init__(self, python: Path, backend: str = "numpy"):
         self._proc = subprocess.Popen(
-            [str(python), str(_BRIDGE)],
+            [str(python), str(_BRIDGE), backend],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -113,18 +113,18 @@ def _decode(x):
     return x
 
 
-_mm: MrMustard | None = None
+_mm: dict[str, MrMustard] = {}
 
 
-def mrmustard() -> MrMustard:
-    """The shared bridge; skips the calling test if the reference environment is missing."""
-    global _mm
-    if _mm is None:
+def mrmustard(backend: str = "numpy") -> MrMustard:
+    """The shared bridge running MrMustard's ``backend`` (``"numpy"`` or ``"tensorflow"``, one
+    process each); skips the calling test if the reference environment is missing."""
+    if backend not in _mm:
         python = mrmustard_python()
         if python is None:
             pytest.skip("MrMustard reference environment not found (tools/setup_reference_envs.sh)")
-        _mm = MrMustard(python)
-    return _mm
+        _mm[backend] = MrMustard(python, backend)
+    return _mm[backend]
 
 
 def to_ref(mean, cov):

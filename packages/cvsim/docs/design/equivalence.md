@@ -66,6 +66,8 @@ Each is reproduced by a test; cvsim's value is confirmed by the Fock oracle or b
 | MrMustard 0.7.3 | `compose_channels_XYd` computes `X₂ Y₁ X₂` instead of `X₂ Y₁ X₂ᵀ` | wrong (even non-symmetric) `Y` when the second channel is not symmetric, e.g. a rotation | `test_mrmustard_composition_with_a_rotation` (xfail) |
 | MrMustard 0.7.3 | `von_neumann_entropy` regularises `xlogy(ν−, ν− + 1e-9)` | bias of about 1e-9 nats per mode | tolerance in `test_single_mode_entropy_and_photon_variance` |
 | MrMustard 0.7.3 | `Measurement.__lshift__` never returns its result and then fails building its error message | `detector << state` raises `AttributeError`; `detector.primal(state)` works | read in the source and reproduced by hand; the bridge uses `primal` |
+| MrMustard 0.7.3 | `ThresholdDetector` with dark clicks builds `P(no click | n) = (1 − η)ⁿ − p_dark` instead of `(1 − η)ⁿ (1 − p_dark)` | right for `n = 0`, wrong for `n ≥ 1`: click probabilities off by up to 0.02 for `p_dark = 0.05`; its numbers are reproduced exactly by that kernel on cvsim's photon statistics | `test_mrmustard_threshold_dark_counts` (xfail), `test_mrmustard_threshold_dark_formula_reproduced` |
+| MrMustard 0.7.3 | `PNRDetector` always convolves with the dark-count prior, implemented only in the TensorFlow math backend | `PNRDetector` fails on the default NumPy backend even with `dark_counts = 0` | the bridge runs a second process on the TensorFlow backend |
 | The Walrus 0.22 | `reduced_gaussian` returns the state unchanged when every mode is listed | `reduced_gaussian(…, [1, 0])` does not reorder; cvsim's `reduce([1, 0])` does | `test_reduced_gaussian_ignores_the_order_of_a_full_mode_list` |
 | The Walrus 0.22, Strawberry Fields 0.23 | decomposition ordering and gauge left to LAPACK | see CONVENTIONS.md, "Comparison with other libraries" | `test_contract_thewalrus.py` |
 
@@ -90,6 +92,22 @@ executed by the backends (S09).
 The Walrus' `density_matrix` tensor is ordered `(n₁, m₁, n₂, m₂, …)`; cvsim's density matrices
 are `(n₁ n₂ …) × (m₁ m₂ …)` (mode 0 most significant).
 
+## S10: photon counting
+
+| Comparison | Test | Agreement |
+| --- | --- | --- |
+| `core.hafnian`: hafnian (power trace and subset recursion), loop hafnian, torontonian vs `qttlind.gaussian.hafnian`; plus `perm`, `tor`, `hafnian(method="recursive")`, `hafnian(loop=True)` of The Walrus | `test_contract_photon.py` | `1e-13 · (n−1)!! max|A|^{n/2}` (the bound on any hafnian), `1e-12 · 2^m` for torontonians |
+| `pattern_probability`, `click_probability` vs qttlind; `pnr_distribution` vs `thewalrus.quantum.probabilities`; clicks vs `thewalrus.threshold_detection_prob` (displaced, mixed, 1–3 modes) | `test_contract_photon.py` | 1e-12 |
+| `fock_density_matrix` vs `qttlind.gaussian.fock` and `thewalrus.quantum.density_matrix` | `test_contract_photon.py` | 1e-12 |
+| `herald` vs slices of The Walrus' density matrix | `test_contract_photon.py` | 1e-12 |
+| `pnr_distribution` (efficiency, Poisson dark counts) and `herald` vs MrMustard's `PNRDetector`; `click_distribution` vs `ThresholdDetector` (no dark clicks) | `test_contract_photon.py` (`mrmustard`) | 1e-9 (MrMustard truncates at its internal cutoff 28) |
+| PNR and threshold measurements of the Fock backend vs `photon.herald` / `click_distribution` | `tests/test_photon.py` | 1e-10 at cutoff 32 |
+| Brute force: permanent and hafnian by enumeration, loop hafnian by matchings, torontonian vs inclusion–exclusion, closed forms (thermal, coherent, squeezed, two-mode squeezed heralding, Poisson detector model) | `tests/test_photon.py` | round-off |
+
+Detector models are those of MrMustard: efficiency is a loss channel before an ideal detector
+(binomial thinning of the count); PNR dark counts are Poissonian and add to the count; a
+threshold detector clicks with probability `p_dark` with no light, independently of the photons.
+
 ## Only in cvsim, and how it is checked
 
 | Feature | Check |
@@ -103,9 +121,8 @@ are `(n₁ n₂ …) × (m₁ m₂ …)` (mode 0 most significant).
 
 ## Only in the references (for now)
 
-Fock amplitudes, hafnians and photon-number distributions (qttlind, The Walrus, MrMustard) arrive
-with photon counting in S10 and will be compared there; MrMustard's Fock-space and Bargmann
-representations with the non-Gaussian sessions (S20–S24). The non-Gaussian comb and the Lindblad
+MrMustard's Fock-space and Bargmann representations and The Walrus' approximate hafnians and
+GBS samplers come with the non-Gaussian and GBS sessions (S20–S28). The non-Gaussian comb and the Lindblad
 engine stay in qttlind (decision D1).
 
 ## Running the comparisons

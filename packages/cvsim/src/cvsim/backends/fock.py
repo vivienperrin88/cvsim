@@ -35,7 +35,7 @@ _SUPPORTED = (
     "Vacuum", "Coherent", "Squeezed", "Thermal", "Fock",
     "D", "R", "S", "P", "F", "BS", "S2", "CZ", "CX", "Interferometer", "Symplectic", "Kerr",
     "Loss", "Amplifier", "AdditiveNoise", "PhaseNoise",
-    "Homodyne", "Heterodyne",
+    "Homodyne", "Heterodyne", "PNR", "Threshold",
 )  # fmt: skip
 
 
@@ -410,10 +410,59 @@ class FockBackend:
                 return True
         return False
 
+    def _count(
+        self, t: np.ndarray, o: Op, axis: int, rng: np.random.Generator | None
+    ) -> tuple[np.ndarray | None, int, float]:
+        """PNR / click detection: loss η, then the POVM of the dark-count model (CONVENTIONS.md)."""
+        p, N = o.params, self.cutoff
+        t = self._loss(t, axis, p["efficiency"])
+        m = t.ndim // 2
+        red = t
+        for ax in sorted(set(range(m)) - {axis}, reverse=True):
+            red = np.trace(red, axis1=ax, axis2=ax + red.ndim // 2)
+        diag = np.clip(np.real(np.diag(red)), 0.0, None)
+
+        def weights(n: int) -> np.ndarray:
+            """POVM element of outcome ``n`` on the Fock diagonal."""
+            w = np.zeros(N)
+            if o.name == "PNR":
+                nu = p["dark_counts"]
+                for k in range(min(n, N - 1) + 1):
+                    w[k] = math.exp(-nu) * nu ** (n - k) / math.factorial(n - k) if nu > 0 else float(k == n)
+                return w
+            pd = p["dark_prob"]
+            if n == 0:
+                w[0] = 1.0 - pd
+            else:
+                w[:] = 1.0
+                w[0] = pd
+            return w
+
+        n_outcomes = N if o.name == "PNR" else 2
+        if p["outcome"] is None:
+            assert rng is not None
+            probs = np.array([weights(n) @ diag for n in range(n_outcomes)])
+            n_out = int(rng.choice(n_outcomes, p=probs / probs.sum()))
+        else:
+            n_out = int(p["outcome"])
+            if n_out >= n_outcomes:
+                raise InputError(f"{o.name} outcome {n_out} is out of range (cutoff {N})")
+        w = weights(n_out)
+        if m == 1:
+            return None, n_out, float(w @ diag)
+        rest = np.zeros((N,) * (2 * (m - 1)), dtype=complex)
+        for k in range(N):
+            if w[k] != 0.0:
+                rest += w[k] * np.take(np.take(t, k, axis=axis), k, axis=m - 1 + axis)
+        prob = float(np.real(np.trace(rest.reshape(N ** (m - 1), N ** (m - 1)))))
+        return (rest / prob if prob > 0 else rest), n_out, prob
+
     def _measure(
         self, t: np.ndarray, o: Op, axis: int, rng: np.random.Generator | None
     ) -> tuple[np.ndarray | None, float | complex, float]:
         p = o.params
+        if o.name in ("PNR", "Threshold"):
+            return self._count(t, o, axis, rng)
         eta, vel = p["efficiency"], p["electronic"]
         het = o.name == "Heterodyne"
         if eta < 1:
