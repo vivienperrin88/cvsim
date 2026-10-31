@@ -135,3 +135,10 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
   NumPy/SciPy only, optional `qttlind` extra, private classifiers), proprietary licence, test
   configuration (`slow`, `qttlind`, `repro` markers; seeded `rng`), Sphinx documentation skeleton,
   architecture decision records D1–D8, notebook and doc-example runners.
+
+### Fixed
+
+- `core.linalg.nearest_physical_covariance` returned a projected matrix for a physical input whose
+  pure mode came out of Williamson as `ν = ½ − 3e-14` (LAPACK round-off; seen with the locked NumPy
+  2.5 / SciPy 1.18). Eigenvalues within `atol · max(1, max|V|)` of the floor (new argument, default
+  `1e-12`) now count as physical.

@@ -428,6 +428,21 @@ class TestNearestPhysical:
 
     @SETTINGS
     @given(seed=seeds, M=st.integers(1, 4))
+    def test_pure_modes_survive_williamson_round_off(self, seed, M):
+        """A pure mode (ν = ½ exactly) may come out of Williamson as ½ − O(ε‖V‖): still unchanged."""
+        rng = np.random.default_rng(seed)
+        nu = np.concatenate([[0.5], rng.uniform(0.5, 2.0, M - 1)])
+        V, _ = _random_covariance(rng, M, nu, r_max=1.0)
+        assert np.array_equal(la.nearest_physical_covariance(V), (V + V.T) / 2)
+
+    def test_tolerance_does_not_hide_real_violations(self, rng):
+        V, _ = _random_covariance(rng, 2, np.array([0.5 - 1e-6, 1.0]))
+        Vp = la.nearest_physical_covariance(V)
+        assert not np.array_equal(Vp, (V + V.T) / 2)
+        assert la.symplectic_eigenvalues(Vp).min() >= 0.5 - 1e-12
+
+    @SETTINGS
+    @given(seed=seeds, M=st.integers(1, 4))
     def test_lifts_and_only_adds_noise(self, seed, M):
         rng = np.random.default_rng(seed)
         nu = rng.uniform(0.2, 1.5, M)  # some below 1/2: unphysical
