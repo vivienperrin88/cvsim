@@ -161,6 +161,14 @@ angular frequencies in rad/s; `NM`, `MM`, `FS`, `MHZ`, … are scale factors (`2
   `β = L k''`; `φ = sinc(ΔkL/2) e^{iΔkL/2}`, or `exp(−0.193 (ΔkL/2)²) e^{iΔkL/2}` (apodised /
   Gaussian approximation, equal amplitude FWHM). The signal GVD `β_s` sets the width along
   `Ω_s − Ω_i` and must be non-zero for a finite Schmidt number.
+* **Grid sizing** (`FrequencyGrid.auto`). The pump's `center` and `half_width` are the midpoint
+  and half distance of the outermost half-maximum crossings of `|α|²` (one peak: its centre and
+  HWHM); its `resolution_width` is the narrowest HWHM of the peaks above half maximum or, for a
+  turning phase, `1/max|dφ/dΩ₊|` over them (`min(h, 1/(|c| h))` for a chirp `c`). The phase
+  matching's half widths are the detunings closest to the origin with `|ΔkL/2| = π` along
+  `Ω_s = Ω_i` (`2π/(|τ| + √(τ² + 2π|b|))`, `b = 2β_p − β_s`) and `Ω_s = −Ω_i` (`√(2π/|β_s|)`),
+  for both shapes. Half span `|center|/2 + extent (w₊ + w₋)`; the step puts `points_per_width`
+  points across the main-lobe scale (the side lobes of a sinc are not resolved to that standard).
 * **Supermodes.** Pixel modes `a_j = √δ a(ω₀ + Ω_j)` on a uniform grid; `J_jk = f(Ω_j, Ω_k)`
   normalised to `‖J‖_F = 1`; Takagi `J = U diag(s) Uᵀ` with degeneracy tolerance `1e-11`
   (`SCHMIDT_RTOL`); supermode `b_k = Σ_j conj(U_jk) a_j` (column `k` of `U`, the convention of
@@ -186,7 +194,10 @@ angular frequencies in rad/s; `NM`, `MM`, `FS`, `MHZ`, … are scale factors (`2
   (`⟨e^{±2r}⟩ = e^{±2r_k + 2σ²}`; the waveguide's propagation noise averaged by 48-node
   Gauss–Hermite), `ApproximationWarning`. `calibrate(sq_dB, anti_dB, η)` inverts the pure-loss
   model `V_∓ = η e^{∓2r} + 1 − η` and returns the excess (shot-noise units and dB) at the
-  measurement point.
+  measurement point. Without `η`, data within `rtol` of a pure state (`V₋V₊ ∈ [1 − rtol, 1]`, or a
+  fitted `η` rounding above 1) are read as pure: `η = 1`, `r = ¼ ln(V₊/V₋)`.
+* **Equality**: `Supermodes` and `SourceOutput` (array holders, like `FrequencyGrid`) compare and
+  hash by identity; `SPOPO`, `Waveguide`, `Pump`, `PhaseMatching` compare their fields.
 * **Ledger order**: squeezing gate → gain fluctuations → source losses → excess antisqueezing.
 
 ## Figures of merit **[tested]**
@@ -284,6 +295,8 @@ do.
   numerical tolerance) and `CalibrationError` (calibration data the model cannot produce);
   `ConvergenceError` (also a `RuntimeError`) for iterative methods that fail.
 * Validate at public entry points; messages state what was expected and what was received.
+  Scalars go through `cvsim.core._checks` (`finite`, `in_range`, `positive`, `non_negative`,
+  `integer`): a value that is not a real number at all also raises `InputError`.
 * Warnings derive from `CvsimWarning`: `ApproximationWarning` when a result relies on an
   approximation (for instance moment-matched phase noise), `CutoffWarning` when a Fock cutoff is
   nearly exhausted. The test suite turns them into errors unless a test expects them.

@@ -142,3 +142,32 @@ All notable changes are documented here ([Keep a Changelog](https://keepachangel
   pure mode came out of Williamson as `ν = ½ − 3e-14` (LAPACK round-off; seen with the locked NumPy
   2.5 / SciPy 1.18). Eigenvalues within `atol · max(1, max|V|)` of the floor (new argument, default
   `1e-12`) now count as physical.
+  A negative or non-finite `atol` now raises `InputError`.
+- S11 review (`fix/S11-review`):
+  - `hardware.jsa.Pump.sampled` set `half_width` to the extent of the samples instead of the HWHM
+    of `|α|²`, so `FrequencyGrid.auto` gave a narrow sampled pump a grid that did not resolve it,
+    silently. The half-maximum crossings are now solved on the linear interpolation; `half_width`
+    and the new `center` span every peak above half maximum (the grid's span is shifted by
+    `|center|/2`, so an off-centre pump stays on it).
+  - `Pump` has a `resolution_width` (the narrowest peak's HWHM, shortened by a turning phase:
+    `1/max|dφ/dΩ₊|` over the peaks and their crossings; `min(h, 1/(|c| h))` for a chirp `c`), and
+    `FrequencyGrid.auto` sizes its step from the main-lobe scale of the JSA (pump, phase matching
+    along both diagonals).
+  - `PhaseMatching.half_width_sum` took `min(π/|τ|, √(2π/|b|))`, which overestimates the first
+    zero when GVM and the quadratic term are both present; it is now the exact closest zero
+    `2π/(|τ| + √(τ² + 2π|b|))`. Its docstring stated the wrong level for the Gaussian shape
+    (`exp(−γπ²) ≈ 0.149`, not `1/e`).
+  - `hardware.excess.calibrate(efficiency=None)` returned a negative `r` and efficiency for data in
+    the `rtol` band of a pure state, divided by zero for very weak squeezing, and lost precision
+    for weak squeezing (relative error 5e-5 at `r = 1e-6`). Both branches now form the differences
+    from the dB values without cancellation; the band is read as a pure state (`η = 1`,
+    `r = ¼ ln(V₊/V₋)`), and a squeezing too weak to fit in double precision raises
+    `CalibrationError`. `rtol` is validated.
+  - `Supermodes` and `SourceOutput` compare and hash by identity: the generated `__eq__` compared
+    arrays and raised, which also broke `==` and `hash` on `SPOPO` and `Waveguide`.
+  - `FrequencyGrid.auto` validates `points_per_width` and `max_points`; every scalar validation of
+    `core.conventions`, `core.units`, `core.linalg` and `hardware` goes through `core._checks`,
+    so non-numeric input (also NumPy booleans and complex numbers) raises `InputError` instead of a
+    bare `ValueError` or a silent truncation; sizes accept NumPy integers and 0-d arrays. `Waveguide.output`
+    averages both propagation-noise components in one Gauss–Hermite pass (`gain_average` accepts
+    an output with a leading axis), and the per-mode loss is built from `conventions.loss_xy`.
