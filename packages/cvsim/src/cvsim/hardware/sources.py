@@ -47,6 +47,7 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 
+from ..core import _checks as ck
 from ..core import conventions as cv
 from ..core import units
 from ..core._types import FloatArray
@@ -59,15 +60,6 @@ __all__ = ["SPOPO", "SourceOutput", "Spectrum", "Waveguide", "waveguide_propagat
 
 #: Default analysis frequency of the SPOPO, Ω = 2π × 1 MHz (rad/s).
 DEFAULT_ANALYSIS_FREQUENCY = units.angular(1.0 * units.MHZ)
-
-
-def _check(name: str, value: float, lo: float, hi: float, lo_open: bool = False, hi_open: bool = False) -> float:
-    v = float(value)
-    ok = math.isfinite(v) and (v > lo if lo_open else v >= lo) and (v < hi if hi_open else v <= hi)
-    if not ok:
-        interval = f"{'(' if lo_open else '['}{lo}, {hi}{')' if hi_open else ']'}"
-        raise InputError(f"{name} must be in {interval}, got {value}")
-    return v
 
 
 def _diag_channel(x: FloatArray, y: FloatArray) -> GaussianChannel:
@@ -98,7 +90,7 @@ def waveguide_propagation(r: npt.ArrayLike, attenuation_length: float) -> tuple[
         ``κℓ`` (power attenuation coefficient × length), >= 0.
     """
     r_ = np.atleast_1d(np.asarray(r, dtype=float))
-    a = _check("attenuation_length", attenuation_length, 0.0, math.inf, hi_open=True)
+    a = ck.non_negative("attenuation_length", attenuation_length)
     yx = 0.5 * a * _relative_expm1(-(2 * r_ + a))
     yp = 0.5 * a * _relative_expm1(2 * r_ - a)
     return yx, yp
@@ -112,9 +104,11 @@ class Spectrum(NamedTuple):
     antisqueezed: FloatArray
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class SourceOutput:
     """The state a source emits, in its supermode basis, with its noise ledger.
+
+    Compared and hashed by identity (it holds arrays and a ledger).
 
     Attributes
     ----------
@@ -197,7 +191,9 @@ def _finish(ledger: NoiseLedger, r: FloatArray, excess: ExcessNoise) -> NoiseLed
 
 
 def _uniform_loss(eta: float, M: int) -> GaussianChannel:
-    return GaussianChannel(math.sqrt(eta) * np.eye(2 * M), 0.5 * (1.0 - eta) * np.eye(2 * M))
+    """:meth:`GaussianChannel.loss` on each of ``M`` modes, from :func:`cvsim.core.conventions.loss_xy`."""
+    X, Y = cv.loss_xy(eta)
+    return GaussianChannel(np.kron(X, np.eye(M)), np.kron(Y, np.eye(M)), validate=False)
 
 
 # ------------------------------------------------------------------------------- SPOPO
@@ -225,9 +221,12 @@ class SPOPO:
     def __post_init__(self) -> None:
         if not isinstance(self.supermodes, Supermodes):
             raise InputError(f"supermodes must be Supermodes, got {type(self.supermodes).__name__}")
-        _check("escape_efficiency", self.escape_efficiency, 0.0, 1.0, lo_open=True)
-        _check("linewidth", self.linewidth, 0.0, math.inf, lo_open=True, hi_open=True)
-        if not (math.isfinite(float(self.pump)) and 0 <= self.pump < 1):
+        object.__setattr__(
+            self, "escape_efficiency", ck.in_range("escape_efficiency", self.escape_efficiency, 0.0, 1.0, lo_open=True)
+        )
+        object.__setattr__(self, "linewidth", ck.positive("linewidth", self.linewidth))
+        object.__setattr__(self, "pump", ck.finite("pump", self.pump))
+        if not 0 <= self.pump < 1:
             raise InputError(
                 f"pump σ = √(P/P_thr) must be in [0, 1) (below threshold; above threshold is not modelled), "
                 f"got {self.pump}"
@@ -257,9 +256,9 @@ class SPOPO:
         pump
             ``σ = √(P/P_thr)`` in ``[0, 1)``.
         """
-        f = _check("repetition_rate", repetition_rate, 0.0, math.inf, lo_open=True, hi_open=True)
-        T = _check("transmission", transmission, 0.0, 1.0, lo_open=True, hi_open=True)
-        L = _check("loss", loss, 0.0, 1.0, hi_open=True)
+        f = ck.positive("repetition_rate", repetition_rate)
+        T = ck.in_range("transmission", transmission, 0.0, 1.0, lo_open=True, hi_open=True)
+        L = ck.in_range("loss", loss, 0.0, 1.0, hi_open=True)
         return cls(supermodes, T / (T + L), f * (T + L) / 2.0, pump)
 
     @property
@@ -276,9 +275,7 @@ class SPOPO:
         omega
             Analysis frequency ``Ω`` (rad/s).
         """
-        w = float(omega)
-        if not math.isfinite(w):
-            raise InputError(f"omega must be finite, got {omega}")
+        w = ck.finite("omega", omega)
         x2 = (w / self.linewidth) ** 2
         sk = self.pump_parameters
         return np.asarray(0.5 * (np.log1p(sk * (2 + sk) + x2) - np.log((1 - sk) ** 2 + x2)), dtype=float)
@@ -350,10 +347,12 @@ class Waveguide:
     def __post_init__(self) -> None:
         if not isinstance(self.supermodes, Supermodes):
             raise InputError(f"supermodes must be Supermodes, got {type(self.supermodes).__name__}")
-        _check("length", self.length, 0.0, math.inf, lo_open=True, hi_open=True)
-        _check("loss_db_per_cm", self.loss_db_per_cm, 0.0, math.inf, hi_open=True)
-        _check("r0", self.r0, 0.0, math.inf, hi_open=True)
-        _check("output_coupling", self.output_coupling, 0.0, 1.0, lo_open=True)
+        object.__setattr__(self, "length", ck.positive("length", self.length))
+        object.__setattr__(self, "loss_db_per_cm", ck.non_negative("loss_db_per_cm", self.loss_db_per_cm))
+        object.__setattr__(self, "r0", ck.non_negative("r0", self.r0))
+        object.__setattr__(
+            self, "output_coupling", ck.in_range("output_coupling", self.output_coupling, 0.0, 1.0, lo_open=True)
+        )
 
     @property
     def attenuation_length(self) -> float:
@@ -394,8 +393,7 @@ class Waveguide:
         M = r.size
         a = self.attenuation_length
         if ex.gain_rms > 0:
-            yx = gain_average(lambda q: waveguide_propagation(q, a)[0], r, ex.gain_rms)
-            yp = gain_average(lambda q: waveguide_propagation(q, a)[1], r, ex.gain_rms)
+            yx, yp = gain_average(lambda q: np.stack(waveguide_propagation(q, a)), r, ex.gain_rms)
         else:
             yx, yp = waveguide_propagation(r, a)
         ledger = _start("waveguide", r, ex)
