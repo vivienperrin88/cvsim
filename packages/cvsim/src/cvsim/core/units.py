@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import math
 
-from ..errors import InputError
+from . import _checks
 
 __all__ = [
     "CM",
@@ -76,18 +76,8 @@ _DB_PER_CM = math.log(10.0) / 10.0 / CM  # (1/m) per (dB/cm)
 _FWHM_PER_SIGMA = 2.0 * math.sqrt(math.log(2.0))
 
 
-def _positive(name: str, value: float) -> float:
-    v = float(value)
-    if not (math.isfinite(v) and v > 0):
-        raise InputError(f"{name} must be finite and > 0, got {value}")
-    return v
-
-
-def _non_negative(name: str, value: float) -> float:
-    v = float(value)
-    if not (math.isfinite(v) and v >= 0):
-        raise InputError(f"{name} must be finite and >= 0, got {value}")
-    return v
+_positive = _checks.positive
+_non_negative = _checks.non_negative
 
 
 def angular_frequency(wavelength: float) -> float:
@@ -148,10 +138,7 @@ def angular(frequency: float) -> float:
     frequency
         Frequency (Hz).
     """
-    f = float(frequency)
-    if not math.isfinite(f):
-        raise InputError(f"frequency must be finite, got {frequency}")
-    return 2.0 * math.pi * f
+    return 2.0 * math.pi * _checks.finite("frequency", frequency)
 
 
 def hertz(omega: float) -> float:
@@ -162,10 +149,7 @@ def hertz(omega: float) -> float:
     omega
         Angular frequency (rad/s).
     """
-    w = float(omega)
-    if not math.isfinite(w):
-        raise InputError(f"omega must be finite, got {omega}")
-    return w / (2.0 * math.pi)
+    return _checks.finite("omega", omega) / (2.0 * math.pi)
 
 
 def attenuation_from_db_per_cm(db_per_cm: float) -> float:

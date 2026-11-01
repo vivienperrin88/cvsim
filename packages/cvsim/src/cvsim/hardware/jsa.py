@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import numpy.typing as npt
 
+from ..core import _checks as ck
 from ..core import linalg as la
 from ..core import units
 from ..core._types import ComplexArray, FloatArray
@@ -71,13 +72,6 @@ SCHMIDT_RTOL = 1e-11
 
 _Spectrum = Callable[[FloatArray], ComplexArray]
 _Joint = Callable[[FloatArray, FloatArray], ComplexArray]
-
-
-def _finite(name: str, value: float) -> float:
-    v = float(value)
-    if not math.isfinite(v):
-        raise InputError(f"{name} must be finite, got {value}")
-    return v
 
 
 def _readonly(a: np.ndarray) -> np.ndarray:
@@ -117,12 +111,9 @@ class FrequencyGrid:
         half_span
             Largest detuning (rad/s), > 0.
         """
-        if int(n) != n or n < 2:
-            raise InputError(f"n must be an integer >= 2, got {n}")
-        h = _finite("half_span", half_span)
-        if h <= 0:
-            raise InputError(f"half_span must be > 0, got {half_span}")
-        return cls(np.linspace(-h, h, int(n)))
+        n_ = ck.integer("n", n, 2)
+        h = ck.positive("half_span", half_span)
+        return cls(np.linspace(-h, h, n_))
 
     @classmethod
     def auto(
@@ -138,9 +129,14 @@ class FrequencyGrid:
 
         ``w₊`` is the JSA's half width along the diagonal ``Ω_s = Ω_i`` (the narrower of the pump's
         and the phase matching's) and ``w₋`` along the anti-diagonal ``Ω_s = −Ω_i`` (phase matching
-        only); the support lies within ``|Ω| <= extent (w₊ + w₋)``, the half span. By default the
-        number of points puts ``points_per_width`` points across ``w₊`` (at most ``max_points``);
-        a grid coarser than that raises an :class:`~cvsim.errors.ApproximationWarning`.
+        only); the support lies within ``|Ω| <= |c|/2 + extent (w₊ + w₋)``, the half span, with ``c``
+        the pump's ``center`` (the diagonal sees the pump at ``Ω₊ = 2Ω``). The step resolves the
+        scale ``w_r`` of the JSA's main lobe: the smaller of ``w₋``, the phase matching's
+        ``half_width_sum`` and half the pump's ``resolution_width`` (its HWHM, or less for a chirped
+        pump). By default the number of points puts ``points_per_width`` points across ``w_r`` (at
+        most ``max_points``); a grid coarser than that raises an
+        :class:`~cvsim.errors.ApproximationWarning`. The side lobes of a ``sinc`` phase matching
+        narrow away from the origin and are not resolved to the same standard (pass ``n`` for that).
 
         Parameters
         ----------
@@ -153,13 +149,13 @@ class FrequencyGrid:
         extent
             Half span in units of ``w₊ + w₋``, > 0.
         points_per_width
-            Resolution target: points across ``w₊``.
+            Resolution target: points across ``w_r``, an integer >= 1.
         max_points
-            Cap on the automatic number of points.
+            Cap on the automatic number of points, an integer >= 2.
         """
-        ext = _finite("extent", extent)
-        if ext <= 0:
-            raise InputError(f"extent must be > 0, got {extent}")
+        ext = ck.positive("extent", extent)
+        ppw = ck.integer("points_per_width", points_per_width, 1)
+        cap = ck.integer("max_points", max_points, 2)
         w_plus = min(pump.half_width / 2.0, phase_matching.half_width_sum)
         w_minus = phase_matching.half_width_difference
         if not math.isfinite(w_minus):
@@ -167,14 +163,15 @@ class FrequencyGrid:
                 "the phase matching is unbounded along Ω_s − Ω_i (signal GVD β_s = 0): give gvd_signal "
                 "or an explicit FrequencyGrid"
             )
-        half = ext * (w_plus + w_minus)
+        w_res = min(pump.resolution_width / 2.0, phase_matching.half_width_sum, w_minus)
+        half = abs(pump.center) / 2.0 + ext * (w_plus + w_minus)
         if n is None:
-            n = min(int(max_points), max(64, math.ceil(2 * half * points_per_width / w_plus) + 1))
+            n = min(cap, max(64, math.ceil(2 * half * ppw / w_res) + 1))
         grid = cls.centered(n, half)
-        if grid.step > w_plus / points_per_width * (1 + 1e-12):
+        if grid.step > w_res / ppw * (1 + 1e-12):
             warnings.warn(
-                f"FrequencyGrid.auto: step {grid.step:.3e} rad/s does not resolve the JSA's narrow half "
-                f"width {w_plus:.3e} rad/s with {points_per_width} points; increase n (now {n})",
+                f"FrequencyGrid.auto: step {grid.step:.3e} rad/s does not resolve the JSA's shortest scale "
+                f"{w_res:.3e} rad/s with {ppw} points; increase n (now {n})",
                 ApproximationWarning,
                 stacklevel=2,
             )
@@ -206,13 +203,29 @@ class FrequencyGrid:
 class Pump:
     """Spectral amplitude ``α(Ω₊)`` of the pump, as a function of its detuning ``Ω₊`` from ``2ω₀``.
 
-    Build it with :meth:`gaussian` or :meth:`sampled`. ``half_width`` is the half width at half
-    maximum of ``|α|²`` (rad/s), used to size grids.
+    Build it with :meth:`gaussian` or :meth:`sampled`. Three numbers size grids
+    (:meth:`FrequencyGrid.auto`), all in rad/s:
+
+    * ``center`` and ``half_width``: the midpoint and half the distance of the outermost points
+      where ``|α|²`` crosses half its maximum, so the span covers every peak above half maximum
+      (for a single peak, its centre and its half width at half maximum, HWHM);
+    * ``resolution_width``: the shortest scale of ``α``, which sets the grid's step: the narrowest
+      HWHM of those peaks, or ``1/max|dφ/dΩ₊|`` over them when the spectral phase ``φ = arg α``
+      turns faster (a chirp). ``0`` (default) means ``half_width``.
     """
 
     amplitude: _Spectrum
     half_width: float
     description: str = ""
+    resolution_width: float = 0.0
+    center: float = 0.0
+
+    def __post_init__(self) -> None:
+        h = ck.positive("half_width", self.half_width)
+        r = h if self.resolution_width == 0 else ck.positive("resolution_width", self.resolution_width)
+        object.__setattr__(self, "half_width", h)
+        object.__setattr__(self, "resolution_width", min(h, r))
+        object.__setattr__(self, "center", ck.finite("center", self.center))
 
     @classmethod
     def gaussian(cls, fwhm: float, chirp: float = 0.0) -> Pump:
@@ -231,17 +244,25 @@ class Pump:
             Quadratic spectral phase (s²).
         """
         sigma = units.amplitude_sigma_from_fwhm(fwhm)
-        c = _finite("chirp", chirp)
+        c = ck.finite("chirp", chirp)
+        h = float(fwhm) / 2.0
 
         def amplitude(w: FloatArray) -> ComplexArray:
             return np.exp(-(w**2) / (2 * sigma**2) + 0.5j * c * w**2)
 
-        return cls(amplitude, float(fwhm) / 2.0, f"gaussian(fwhm={float(fwhm):.4e}, chirp={c:.4e})")
+        # φ = c Ω²/2 turns at |dφ/dΩ| = |c| h at the half-maximum points Ω = ±h; 1/(|c| h) < h iff |c| h² > 1
+        resolution = 1.0 / (abs(c) * h) if abs(c) * h * h > 1.0 else h
+        return cls(amplitude, h, f"gaussian(fwhm={float(fwhm):.4e}, chirp={c:.4e})", resolution)
 
     @classmethod
     def sampled(cls, detunings: npt.ArrayLike, amplitudes: npt.ArrayLike) -> Pump:
         """A measured or shaped pump spectrum, interpolated linearly (real and imaginary parts), zero
         outside the samples.
+
+        The widths of :class:`Pump` are those of the interpolated spectrum: the half-maximum
+        crossings are solved exactly on the linear interpolation (the sample range bounds a peak
+        that reaches it), and the phase rate is taken between consecutive samples over each peak
+        above half maximum, including the intervals of its crossings.
 
         Parameters
         ----------
@@ -266,8 +287,47 @@ class Pump:
             im = np.interp(x, w, a.imag, left=0.0, right=0.0)
             return np.asarray(re + 1j * im, dtype=complex)
 
-        half = float(max(abs(w[0]), abs(w[-1])))
-        return cls(amplitude, half, f"sampled({w.size} points)")
+        center, half, resolution = _sampled_widths(w, a)
+        return cls(amplitude, half, f"sampled({w.size} points)", resolution, center)
+
+
+def _half_crossing(w0: float, w1: float, a0: complex, a1: complex, level: float) -> float:
+    """The detuning in ``[w0, w1]`` where ``|a0 + t (a1 − a0)|² = level`` (one crossing exists)."""
+    d = a1 - a0
+    A = abs(d) ** 2
+    B = 2.0 * (a0.conjugate() * d).real
+    C = abs(a0) ** 2 - level
+    disc = math.sqrt(max(B * B - 4 * A * C, 0.0))
+    # the two roots, written to avoid cancellation; keep the one in [0, 1]
+    q = -0.5 * (B + math.copysign(disc, B))
+    roots = [q / A, C / q] if q != 0 else [0.0]
+    t = min(roots, key=lambda x: abs(x - min(max(x, 0.0), 1.0)))
+    return w0 + min(max(t, 0.0), 1.0) * (w1 - w0)
+
+
+def _sampled_widths(w: FloatArray, a: ComplexArray) -> tuple[float, float, float]:
+    """``(center, half_width, resolution_width)`` of a linearly interpolated spectrum (see :class:`Pump`)."""
+    intensity = np.abs(a) ** 2
+    level = 0.5 * float(intensity.max())
+    above = np.concatenate([[False], intensity >= level, [False]])
+    edges = np.flatnonzero(np.diff(above.astype(np.int8)))
+    runs = list(zip(edges[0::2], edges[1::2] - 1))  # inclusive sample ranges of the peaks >= half max
+    n = w.size
+    rate = 0.0  # fastest phase turn (rad per rad/s) between consecutive samples over the peaks
+    peaks = []
+    for i, j in runs:
+        left = float(w[i]) if i == 0 else _half_crossing(float(w[i - 1]), float(w[i]), a[i - 1], a[i], level)
+        right = float(w[j]) if j == n - 1 else _half_crossing(float(w[j]), float(w[j + 1]), a[j], a[j + 1], level)
+        peaks.append((left, right))
+        lo, hi = max(i - 1, 0), min(j + 1, n - 1)  # include the intervals of the crossings
+        turn = np.abs(np.angle(a[lo + 1 : hi + 1] * np.conj(a[lo:hi]))) / np.diff(w[lo : hi + 1])
+        rate = max(rate, float(turn.max()))
+    left, right = peaks[0][0], peaks[-1][1]
+    half = 0.5 * (right - left)
+    resolution = min(0.5 * (hi_ - lo_) for lo_, hi_ in peaks)
+    if rate * resolution > 1.0:
+        resolution = 1.0 / rate
+    return 0.5 * (left + right), half, resolution
 
 
 # ------------------------------------------------------------------------------- phase matching
@@ -276,9 +336,10 @@ class PhaseMatching:
     """Phase-matching function ``φ(Ω_s, Ω_i)`` of a crystal of given dispersion.
 
     Build it with :meth:`sinc` or :meth:`gaussian`. ``half_width_sum`` and
-    ``half_width_difference`` are the detunings of the first zero (``sinc``) or of the matching
-    ``1/e`` point (``gaussian``) along the diagonal ``Ω_s = Ω_i`` and the anti-diagonal
-    ``Ω_s = −Ω_i`` (``inf`` when unbounded), used to size grids.
+    ``half_width_difference`` are the detunings closest to the origin where ``|ΔkL/2| = π`` along
+    the diagonal ``Ω_s = Ω_i`` and the anti-diagonal ``Ω_s = −Ω_i`` (``inf`` when unbounded), used to
+    size grids: the first zero of the ``sinc`` shape, where the ``gaussian`` shape has fallen to
+    ``exp(−γπ²) ≈ 0.149`` of its maximum, for both shapes.
     """
 
     function: _Joint
@@ -290,37 +351,39 @@ class PhaseMatching:
     shape: str
 
     @staticmethod
-    def _dk_l(gvm: float, gvd_signal: float, gvd_pump: float) -> _Joint:
-        def dk_l(ws: FloatArray, wi: FloatArray) -> ComplexArray:
+    def _dk_l(gvm: float, gvd_signal: float, gvd_pump: float) -> Callable[[FloatArray, FloatArray], FloatArray]:
+        def dk_l(ws: FloatArray, wi: FloatArray) -> FloatArray:
             wp = ws + wi
-            return np.asarray(gvm * wp + 0.5 * gvd_pump * wp**2 - 0.5 * gvd_signal * (ws**2 + wi**2), dtype=complex)
+            return np.asarray(gvm * wp + 0.5 * gvd_pump * wp**2 - 0.5 * gvd_signal * (ws**2 + wi**2), dtype=float)
 
         return dk_l
 
     @staticmethod
     def _widths(gvm: float, gvd_signal: float, gvd_pump: float) -> tuple[float, float]:
-        # first zero of sinc(ΔkL/2): |ΔkL/2| = π. Diagonal Ω_s = Ω_i = Ω: ΔkL = 2τΩ + (2β_p − β_s)Ω²;
-        # anti-diagonal Ω_s = −Ω_i = Ω: ΔkL = −β_s Ω².
+        # first zero of sinc(ΔkL/2): |ΔkL/2| = π. Diagonal Ω_s = Ω_i = Ω: ΔkL = 2τΩ + bΩ², b = 2β_p − β_s;
+        # it reaches 2π first on the side where both terms have the same sign, at the positive root
+        # of |b|Ω² + 2|τ|Ω = 2π, Ω = 2π/(|τ| + √(τ² + 2π|b|)) (π/|τ| for b = 0, √(2π/|b|) for τ = 0).
+        # Anti-diagonal Ω_s = −Ω_i = Ω: ΔkL = −β_s Ω².
         b = 2 * gvd_pump - gvd_signal
-        lin = math.pi / abs(gvm) if gvm else math.inf
-        quad = math.sqrt(2 * math.pi / abs(b)) if b else math.inf
+        t = abs(gvm)
+        w_sum = 2 * math.pi / (t + math.sqrt(t * t + 2 * math.pi * abs(b))) if (gvm or b) else math.inf
         diff = math.sqrt(2 * math.pi / abs(gvd_signal)) if gvd_signal else math.inf
-        return min(lin, quad), diff
+        return w_sum, diff
 
     @classmethod
     def _build(cls, gvm: float, gvd_signal: float, gvd_pump: float, shape: str) -> PhaseMatching:
-        t, bs, bp = _finite("gvm", gvm), _finite("gvd_signal", gvd_signal), _finite("gvd_pump", gvd_pump)
+        t, bs, bp = ck.finite("gvm", gvm), ck.finite("gvd_signal", gvd_signal), ck.finite("gvd_pump", gvd_pump)
         dk_l = cls._dk_l(t, bs, bp)
         if shape == "sinc":
 
             def function(ws: FloatArray, wi: FloatArray) -> ComplexArray:
-                x = dk_l(ws, wi).real / 2
+                x = dk_l(ws, wi) / 2
                 return np.asarray(np.sinc(x / np.pi) * np.exp(1j * x), dtype=complex)
 
         else:
 
             def function(ws: FloatArray, wi: FloatArray) -> ComplexArray:
-                x = dk_l(ws, wi).real / 2
+                x = dk_l(ws, wi) / 2
                 return np.exp(-SINC_GAUSSIAN_GAMMA * x**2 + 1j * x)
 
         w_sum, w_diff = cls._widths(t, bs, bp)
@@ -377,9 +440,12 @@ def joint_spectral_amplitude(pump: Pump, phase_matching: PhaseMatching, grid: Fr
     return np.asarray(f, dtype=complex)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Supermodes:
     """Schmidt decomposition of a degenerate JSA on a frequency grid.
+
+    Compared and hashed by identity (it holds arrays, like :class:`FrequencyGrid`): two
+    decompositions of the same JSA are distinct objects.
 
     Attributes
     ----------
@@ -431,9 +497,7 @@ class Supermodes:
         r0
             Squeezing parameter of supermode 0 (nepers), >= 0.
         """
-        r = _finite("r0", r0)
-        if r < 0:
-            raise InputError(f"r0 must be >= 0, got {r0}")
+        r = ck.non_negative("r0", r0)
         return np.asarray(r * self.coefficients[: self.kept] / self.coefficients[0], dtype=float)
 
     def coupling(self, r0: float) -> ComplexArray:
@@ -445,9 +509,7 @@ class Supermodes:
         r0
             Squeezing parameter of supermode 0 (nepers), >= 0.
         """
-        r = _finite("r0", r0)
-        if r < 0:
-            raise InputError(f"r0 must be >= 0, got {r0}")
+        r = ck.non_negative("r0", r0)
         return np.asarray(r / self.coefficients[0] * self.jsa, dtype=complex)
 
 
@@ -504,10 +566,9 @@ def schmidt_decomposition(
             f"the JSA is not symmetric (max |J − Jᵀ| = {asym:.2e} for ‖J‖ = 1): only degenerate type-0/I "
             "down-conversion is modelled (type-II is deferred)"
         )
-    if not 0 <= tol < 1:
-        raise InputError(f"tol must be in [0, 1), got {tol}")
-    if int(max_modes) != max_modes or max_modes < 1:
-        raise InputError(f"max_modes must be an integer >= 1, got {max_modes}")
+    tol = ck.in_range("tol", tol, 0.0, 1.0, hi_open=True)
+    max_modes = ck.integer("max_modes", max_modes, 1)
+    edge_tol = ck.non_negative("edge_tol", edge_tol)
     J = np.asarray((J + J.T) / 2, dtype=complex)
     J.setflags(write=False)
     intensity = np.abs(J) ** 2

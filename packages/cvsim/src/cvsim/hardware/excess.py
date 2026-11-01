@@ -26,6 +26,7 @@ parameter and the excess antisqueezing at the measurement point.
 from __future__ import annotations
 
 import math
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -33,6 +34,7 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 
+from ..core import _checks as ck
 from ..core._types import FloatArray
 from ..errors import CalibrationError, InputError
 
@@ -73,9 +75,7 @@ class ExcessNoise:
 
     def __post_init__(self) -> None:
         for name in ("antisqueezing_db", "gain_rms"):
-            v = float(getattr(self, name))
-            if not (math.isfinite(v) and v >= 0):
-                raise InputError(f"{name} must be finite and >= 0, got {getattr(self, name)}")
+            object.__setattr__(self, name, ck.non_negative(name, getattr(self, name)))
         if self.scaling not in SCALINGS:
             raise InputError(f"scaling must be one of {SCALINGS}, got {self.scaling!r}")
 
@@ -107,9 +107,7 @@ def gain_fluctuation_noise(r: npt.ArrayLike, gain_rms: float) -> FloatArray:
         Relative rms, >= 0.
     """
     r_ = _as_r(r)
-    g = float(gain_rms)
-    if not (math.isfinite(g) and g >= 0):
-        raise InputError(f"gain_rms must be finite and >= 0, got {gain_rms}")
+    g = ck.non_negative("gain_rms", gain_rms)
     grow = np.expm1(2.0 * (g * r_) ** 2)
     return np.concatenate([0.5 * np.exp(-2 * r_) * grow, 0.5 * np.exp(2 * r_) * grow])
 
@@ -122,19 +120,21 @@ def gain_average(fn: Callable[[FloatArray], FloatArray], r: npt.ArrayLike, gain_
     Parameters
     ----------
     fn
-        Vectorised function of an array of squeezing parameters (same shape out).
+        Vectorised function of an array of squeezing parameters, returning an array whose last axis
+        is ``k`` (the same shape, or e.g. ``(2, k)`` to average two quantities in one pass).
     r
         Nominal squeezing parameters.
     gain_rms
         Relative rms, >= 0.
     """
     r_ = _as_r(r)
+    g = ck.non_negative("gain_rms", gain_rms)
     x, w = np.polynomial.hermite_e.hermegauss(_GH_NODES)  # weight exp(−x²/2)
     w = w / w.sum()
-    total = np.zeros_like(r_)
+    total: FloatArray | float = 0.0
     for xi, wi in zip(x, w):
-        total = total + wi * np.asarray(fn(r_ * (1.0 + float(gain_rms) * xi)), dtype=float)
-    return total
+        total = total + wi * np.asarray(fn(r_ * (1.0 + g * xi)), dtype=float)
+    return np.asarray(total, dtype=float)
 
 
 def antisqueezing_noise(antisqueezed: npt.ArrayLike, r: npt.ArrayLike, excess: ExcessNoise) -> FloatArray:
@@ -173,6 +173,31 @@ class Calibration(NamedTuple):
     excess_db: float
 
 
+def _fit_pure_loss(squeezing_db: float, antisqueezing_db: float) -> Calibration:
+    """``r`` and ``η`` of the pure-loss model through ``V₋``, ``V₊``, without cancellation.
+
+    With ``x_∓ = ∓ dB · ln10/10`` (``V₋ = e^{−x₋}``, ``V₊ = e^{x₊}``): ``d_p = V₊ − 1 = expm1(x₊)``,
+    ``d_m = 1 − V₋ = −expm1(−x₋)`` and, with ``δ = (x₊ − x₋)/2 = ½ ln(V₋V₊)``, ``μ = (x₊ + x₋)/2``,
+    ``V₊ + V₋ − 2 = 2 (2 e^δ sinh²(μ/2) + expm1(δ))``: a sum of non-negative terms when ``δ >= 0``.
+    """
+    ln10_10 = math.log(10.0) / 10.0
+    xp, xm = antisqueezing_db * ln10_10, -squeezing_db * ln10_10
+    dp, dm = math.expm1(xp), -math.expm1(-xm)
+    delta, mu = 0.5 * (xp - xm), 0.5 * (xp + xm)
+    excess_sum = 2.0 * (2.0 * math.exp(delta) * math.sinh(0.5 * mu) ** 2 + math.expm1(delta))
+    if excess_sum <= 0.0 or dp * dm >= excess_sum:  # within tolerance of a pure state
+        return Calibration(0.5 * mu, 1.0, 0.0, 0.0)
+    # e^{2r} = d_p/d_m = 1 + (V₊ + V₋ − 2)/d_m
+    r = 0.5 * math.log1p(excess_sum / dm) if dm >= sys.float_info.min else math.inf
+    eta = dp * dm / excess_sum
+    if not (math.isfinite(r) and eta >= sys.float_info.min):
+        raise CalibrationError(
+            f"squeezing {squeezing_db} dB is too weak against antisqueezing {antisqueezing_db} dB to fit r and η "
+            f"in double precision (1 − V₋ = {dm:.3e}): give the efficiency"
+        )
+    return Calibration(r, eta, 0.0, 0.0)
+
+
 def calibrate(
     squeezing_db: float, antisqueezing_db: float, efficiency: float | None = None, rtol: float = 1e-9
 ) -> Calibration:
@@ -182,7 +207,11 @@ def calibrate(
     ``V_∓ = η e^{∓2r} + 1 − η``:
 
     * ``efficiency=None``: solve for both, ``e^{2r} = (V₊ − 1)/(1 − V₋)``,
-      ``η = (V₊ − 1)/(e^{2r} − 1)``; always possible for physical data, with no excess;
+      ``η = (V₊ − 1)/(e^{2r} − 1) = (V₊ − 1)(1 − V₋)/(V₊ + V₋ − 2)``; always possible for physical
+      data (``V₋V₊ >= 1`` gives ``η <= 1``), with no excess. The differences are formed from the dB
+      values without cancellation, so weak squeezing keeps full precision. Data within the
+      tolerance ``rtol`` of a pure state (``V₋V₊`` in ``[1 − rtol, 1]``, or ``η`` rounding above 1) are
+      read as pure: ``η = 1``, ``r = ¼ ln(V₊/V₋)``;
     * ``efficiency`` given (independently calibrated, e.g. escape × propagation × detection):
       ``r`` from the squeezing, and the excess ``V₊ − (η e^{2r} + 1 − η)`` in shot-noise units and
       in dB (``10 log10`` of the ratio). It is the excess at the measurement point; the
@@ -206,37 +235,36 @@ def calibrate(
         ``efficiency`` allows (``V₋ <= 1 − η``), or the antisqueezing is below the loss-only
         prediction.
     """
-    s, a = float(squeezing_db), float(antisqueezing_db)
-    if not (math.isfinite(s) and math.isfinite(a) and s < 0 < a):
-        raise InputError(
-            f"need squeezing_db < 0 < antisqueezing_db (finite), got {squeezing_db} and {antisqueezing_db}"
-        )
+    s, a = ck.finite("squeezing_db", squeezing_db), ck.finite("antisqueezing_db", antisqueezing_db)
+    if not s < 0 < a:
+        raise InputError(f"need squeezing_db < 0 < antisqueezing_db, got {squeezing_db} and {antisqueezing_db}")
+    tol = ck.in_range("rtol", rtol, 0.0, 1.0, hi_open=True)
     vm, vp = 10.0 ** (s / 10.0), 10.0 ** (a / 10.0)
-    if vm * vp < 1.0 - rtol:
+    if vm * vp < 1.0 - tol:
         raise CalibrationError(
             f"squeezing {s} dB and antisqueezing {a} dB violate the uncertainty principle (V₋V₊ = {vm * vp:.6f} < 1)"
         )
     if efficiency is None:
-        u = (vp - 1.0) / (1.0 - vm)
-        eta = min(1.0, (vp - 1.0) / (u - 1.0))
-        return Calibration(0.5 * math.log(u), eta, 0.0, 0.0)
-    eta = float(efficiency)
-    if not (math.isfinite(eta) and 0 < eta <= 1):
-        raise InputError(f"efficiency must be in (0, 1], got {efficiency}")
-    e2r_inv = (vm - 1.0 + eta) / eta
-    if e2r_inv <= 0:
+        return _fit_pure_loss(s, a)
+    eta = ck.in_range("efficiency", efficiency, 0.0, 1.0, lo_open=True)
+    # without cancellation: d_m = 1 − V₋ = η(1 − e^{−2r}), d_p = V₊ − 1; the loss-only prediction
+    # is V₊ = 1 + η d_m/(η − d_m)
+    ln10_10 = math.log(10.0) / 10.0
+    dm, dp = -math.expm1(s * ln10_10), math.expm1(a * ln10_10)
+    if dm >= eta:
         raise CalibrationError(
             f"squeezing {s} dB is deeper than an efficiency of {eta} allows (at most "
             f"{10 * math.log10(1 - eta) if eta < 1 else -math.inf:.3f} dB)"
         )
-    r = -0.5 * math.log(e2r_inv)
-    predicted = eta / e2r_inv + 1.0 - eta
-    excess = vp - predicted
-    if excess < -rtol * vp:
+    r = -0.5 * math.log1p(-dm / eta)
+    predicted_excess = eta * dm / (eta - dm)  # predicted V₊ − 1
+    predicted = 1.0 + predicted_excess
+    excess = dp - predicted_excess
+    if excess < -tol * vp:
         raise CalibrationError(
             f"antisqueezing {a} dB is below the loss-only prediction {10 * math.log10(predicted):.4f} dB for "
             f"efficiency {eta}: the efficiency is too low or the squeezing mis-measured"
         )
-    if excess <= rtol * vp:  # round-off of a loss-only measurement
+    if excess <= tol * vp:  # round-off of a loss-only measurement
         return Calibration(r, eta, 0.0, 0.0)
-    return Calibration(r, eta, excess, 10.0 * math.log10(vp / predicted))
+    return Calibration(r, eta, excess, 10.0 * math.log1p(excess / predicted) / math.log(10.0))

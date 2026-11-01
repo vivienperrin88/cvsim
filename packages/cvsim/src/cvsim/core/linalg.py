@@ -41,6 +41,7 @@ import numpy.typing as npt
 import scipy.linalg
 
 from ..errors import ConvergenceError, InputError, PhysicalityError, ShapeError
+from . import _checks
 from ._types import ComplexArray, FloatArray, IntArray
 from .conventions import ATOL, VACUUM_VARIANCE, omega
 
@@ -733,14 +734,15 @@ def nearest_physical_covariance(V: npt.ArrayLike, floor: float = VACUUM_VARIANCE
     atol
         Symplectic eigenvalues within ``atol · max(1, max|V|)`` below ``floor`` count as physical:
         Williamson's round-off (a pure mode can come out as ``ν = ½ − 3e-14``) must not turn a
-        physical input into a projected one.
+        physical input into a projected one. Finite, >= 0.
     """
+    tol = _checks.non_negative("atol", atol)
     V_ = _covariance(V)
     w, U = eigh(V_)
     if w[0] <= 0:
         V_ = (U * np.clip(w, floor * 1e-3, None)) @ U.T
     nu, S, _ = williamson(V_)
-    if nu[0] >= floor - atol * max(1.0, float(np.abs(V_).max())):
+    if nu[0] >= floor - tol * max(1.0, float(np.abs(V_).max())):
         return V_
     nu2 = np.maximum(nu, floor)
     out = S @ np.diag(np.concatenate([nu2, nu2])) @ S.T
