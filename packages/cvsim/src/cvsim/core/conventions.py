@@ -35,6 +35,7 @@ import numpy as np
 import numpy.typing as npt
 
 from ..errors import InputError, ShapeError
+from . import _checks
 from ._types import ComplexArray, FloatArray
 
 __all__ = [
@@ -83,11 +84,7 @@ DB_PER_NEPER = 20.0 * math.log10(math.e)
 
 
 # ------------------------------------------------------------------------------- validation helpers
-def _finite(name: str, value: float) -> float:
-    v = float(value)
-    if not math.isfinite(v):
-        raise InputError(f"{name} must be a finite real number, got {value!r}")
-    return v
+_finite = _checks.finite
 
 
 def _num_modes(M: int) -> int:

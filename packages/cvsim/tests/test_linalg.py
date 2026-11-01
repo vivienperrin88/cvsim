@@ -454,6 +454,12 @@ class TestNearestPhysical:
         if kept.all():
             assert np.allclose(Vp, V)
 
+    @pytest.mark.parametrize("atol", [-1e-3, math.nan, math.inf, "small"])
+    def test_atol_validated(self, atol):
+        """Review S11: a negative atol projected physical inputs, nan projected everything."""
+        with pytest.raises(InputError, match="atol"):
+            la.nearest_physical_covariance(0.5 * np.eye(2), atol=atol)
+
     def test_not_even_positive_definite(self):
         V = np.diag([1.0, -0.2, 1.0, 0.3])
         Vp = la.nearest_physical_covariance(V)
