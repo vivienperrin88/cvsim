@@ -381,6 +381,61 @@ class TestCalibration:
         # without the efficiency, the excess is read as extra loss instead
         assert ex.calibrate(sq[0], anti[0]).efficiency < 0.8
 
+    @pytest.mark.parametrize(
+        ("r", "eta"), [(1e-8, 0.5), (1e-6, 0.7), (1e-4, 0.3), (1e-3, 1.0), (0.5, 0.5), (3.0, 0.999999)]
+    )
+    def test_weak_squeezing_keeps_precision(self, r, eta):
+        """Review S11: ``(V₊ − 1)/(u − 1)`` cancelled for weak squeezing (relative error 5e-5 at
+        ``r = 1e-6``, 10 % at ``1e-8``). dB values formed without cancellation (``log1p``/``expm1``)
+        now give back ``r`` and ``η`` to ~1e-10: both need the second-order ``V₊ + V₋ − 2``, whose
+        relative round-off from the dB inputs grows as ``ε/r`` (2e-10 at ``r = 1e-8``)."""
+        ln10 = math.log(10.0)
+        sq = 10 * math.log1p(eta * math.expm1(-2 * r)) / ln10
+        anti = 10 * math.log1p(eta * math.expm1(2 * r)) / ln10
+        cal = ex.calibrate(sq, anti)
+        assert cal.r == pytest.approx(r, rel=1e-9)
+        assert cal.efficiency == pytest.approx(eta, rel=1e-9)
+
+    def test_nearly_pure_data_read_as_pure(self):
+        """Review S11: inside the rtol band the fit gave r < 0 and η < 0, or divided by zero."""
+        vm = 1 - 1e-5
+        vp = 1 / vm - 1e-9  # V₋V₊ = 1 − 1e-9: within rtol
+        cal = ex.calibrate(10 * math.log10(vm), 10 * math.log10(vp))
+        assert cal.efficiency == 1.0
+        assert cal.r == pytest.approx(0.25 * math.log(vp / vm), rel=1e-12) and cal.r > 0
+        tiny = ex.calibrate(-1e-12, 1e-12)
+        assert tiny.efficiency == 1.0
+        assert tiny.r == pytest.approx(1e-12 * math.log(10) / 20, rel=1e-9)
+        # 1 − V₋ underflows: no finite fit (was ZeroDivisionError, or r = inf)
+        for sq in (-5e-324, -1e-320):
+            with pytest.raises(CalibrationError, match="too weak"):
+                ex.calibrate(sq, 1.0)
+
+    @pytest.mark.parametrize(
+        ("r", "eta", "extra"), [(1e-7, 0.5, 0.0), (1e-4, 0.8, 0.0), (1e-4, 0.8, 1e-6), (1.0, 0.6, 0.1)]
+    )
+    def test_known_efficiency_without_cancellation(self, r, eta, extra):
+        """Review of the fix: the efficiency branch formed 1 − V₋ and V₊ − prediction by cancellation."""
+        ln10 = math.log(10.0)
+        sq = 10 * math.log1p(eta * math.expm1(-2 * r)) / ln10
+        anti = 10 * math.log1p(eta * math.expm1(2 * r) + extra) / ln10
+        cal = ex.calibrate(sq, anti, efficiency=eta, rtol=1e-12)
+        assert cal.r == pytest.approx(r, rel=1e-12)
+        assert cal.excess == pytest.approx(extra, rel=1e-6, abs=0)
+        if extra:
+            predicted = eta * math.expm1(2 * r) + 1
+            assert cal.excess_db == pytest.approx(10 * math.log10((predicted + extra) / predicted), rel=1e-9)
+
+    @FAST
+    @given(r=st.floats(1e-9, 3.0), eta=st.floats(1e-3, 1.0))
+    def test_fit_is_physical(self, r, eta):
+        vm = eta * math.exp(-2 * r) + 1 - eta
+        vp = eta * math.exp(2 * r) + 1 - eta
+        if not vm < 1 < vp:
+            return  # r·η below double precision: not representable as data
+        cal = ex.calibrate(10 * math.log10(vm), 10 * math.log10(vp))
+        assert cal.r > 0 and 0 < cal.efficiency <= 1
+
     def test_inconsistent_data(self):
         with pytest.raises(CalibrationError, match="uncertainty"):
             ex.calibrate(-6.0, 3.0)
@@ -393,3 +448,63 @@ class TestCalibration:
                 ex.calibrate(*args)
         with pytest.raises(InputError):
             ex.calibrate(-3.0, 6.0, efficiency=0.0)
+        for kwargs in ({"rtol": -1.0}, {"rtol": math.nan}, {"efficiency": "high"}):
+            with pytest.raises(InputError):
+                ex.calibrate(-3.0, 6.0, **kwargs)
+        with pytest.raises(InputError, match="squeezing_db must be a real number"):
+            ex.calibrate("-3", 6.0)
+
+
+class TestValidation:
+    """Review S11: one validator for every scalar, raising InputError also for non-numbers."""
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda: u.angular_frequency("1550 nm"),
+            lambda: u.angular("abc"),
+            lambda: u.hertz(math.inf),
+            lambda: cv.rotation(np.complex64(1 + 2j)),
+            lambda: cv.rotation(np.True_),
+            lambda: u.attenuation_from_db_per_cm(None),
+            lambda: cv.rotation("x"),
+            lambda: jsa.PhaseMatching.sinc("0.5", 0.2),
+            lambda: jsa.FrequencyGrid.centered(4, "1"),
+            lambda: ex.ExcessNoise(gain_rms="0.1"),
+            lambda: ex.ExcessNoise(antisqueezing_db=-1.0),
+            lambda: ex.gain_fluctuation_noise([1.0], math.nan),
+            lambda: ex.gain_average(np.exp, [1.0], -0.1),
+            lambda: sources.waveguide_propagation([1.0], "1"),
+            lambda: sources.waveguide_propagation([1.0], -1.0),
+        ],
+    )
+    def test_invalid_scalars_raise_input_error(self, call):
+        with pytest.raises(InputError, match="must be"):
+            call()
+
+    def test_source_parameters(self, sm4):
+        for kwargs in ({"escape_efficiency": "0.9"}, {"linewidth": 0.0}, {"pump": "0.5"}, {"pump": 1.0}):
+            args = {"escape_efficiency": 0.9, "linewidth": 1.0, "pump": 0.5} | kwargs
+            with pytest.raises(InputError):
+                sources.SPOPO(sm4, **args)
+        for kwargs in ({"length": 0.0}, {"loss_db_per_cm": -1.0}, {"r0": "1"}, {"output_coupling": 1.5}):
+            with pytest.raises(InputError):
+                sources.Waveguide(sm4, **kwargs)
+        with pytest.raises(InputError, match="omega"):
+            sources.SPOPO(sm4, 0.9, 1.0).squeezing_parameters(math.inf)
+
+    def test_gain_average_of_several_quantities(self):
+        r = np.array([0.3, 1.0, 1.7])
+        both = ex.gain_average(lambda q: np.stack(sources.waveguide_propagation(q, 0.4)), r, 0.1)
+        assert both.shape == (2, 3)
+        for k in (0, 1):
+            one = ex.gain_average(lambda q, k=k: sources.waveguide_propagation(q, 0.4)[k], r, 0.1)
+            assert np.array_equal(both[k], one)
+
+    def test_numpy_integers_are_integers(self):
+        """Review of the fix: 0-d NumPy arrays and NumPy floats of integral value are accepted sizes."""
+        for n in (np.array(64), np.int64(64), np.float32(64.0), 64.0):
+            assert jsa.FrequencyGrid.centered(n, 1.0).size == 64
+        for n in (np.True_, 64.5, np.array([64]), "64"):
+            with pytest.raises(InputError, match="integer"):
+                jsa.FrequencyGrid.centered(n, 1.0)
